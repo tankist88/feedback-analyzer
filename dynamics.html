@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Claim report</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style type="text/css">
+      table.greenTable {
+        font-family: Georgia, serif;
+        border: 6px solid #24943A;
+        background-color: #D4EED1;
+        width: 100%;
+        text-align: left;
+      }
+      table.greenTable td, table.greenTable th {
+        border: 1px solid #24943A;
+        padding: 3px 2px;
+      }
+      table.greenTable tbody td {
+        font-size: 13px;
+      }
+      table.greenTable thead {
+        background: #24943A;
+        background: -moz-linear-gradient(top, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+        background: -webkit-linear-gradient(top, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+        background: linear-gradient(to bottom, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+        border-bottom: 0px solid #444444;
+      }
+      table.greenTable thead th {
+        font-size: 19px;
+        font-weight: bold;
+        color: #F0F0F0;
+        text-align: left;
+        border-left: 2px solid #24943A;
+      }
+      table.greenTable thead th:first-child {
+        border-left: none;
+      }
+      table.greenTable tfoot {
+        font-size: 13px;
+        font-weight: bold;
+        color: #F0F0F0;
+        background: #24943A;
+        background: -moz-linear-gradient(top, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+        background: -webkit-linear-gradient(top, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+        background: linear-gradient(to bottom, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+        border-top: 1px solid #24943A;
+      }
+      table.greenTable tfoot td {
+        font-size: 13px;
+      }
+      table.greenTable tfoot .links {
+        text-align: right;
+      }
+      table.greenTable tfoot .links a{
+        display: inline-block;
+        background: #FFFFFF;
+        color: #24943A;
+        padding: 2px 8px;
+        border-radius: 5px;
+      }
+      .title {
+        width: 8.5in !important;
+        height: 11in !important;
+        padding: 0.75in !important;
+        background-position: center;
+        background-size: 8.5in 11in !important;
+        background-repeat: no-repeat;
+        color: #ffffff;
+        background: #24943A;
+        background: -moz-linear-gradient(top, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+        background: -webkit-linear-gradient(top, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+        background: linear-gradient(to bottom, #5baf6b 0%, #3a9e4d 66%, #24943A 100%);
+      }
+      body, html {
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      @page :first {
+        size: 8.5in 11in !important;
+        bleed: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        @top-center {content: ""}
+        @bottom-center {content: ""}
+      }
+      @page {
+        size: 8.5in 11in !important;
+        margin: 1cm !important;
+        padding: 1cm !important;
+        @top-center {
+          content: "Динамика обращений";
+          width: 100%;
+          height: 100%;
+          vertical-align: bottom;
+          border-bottom: 0.5pt solid
+        }
+        @top-right {
+          content: "";
+          width: 100%;
+          height: 100%;
+          background: url('file:///{{logo_img}}') no-repeat;
+          background-size: 15%;
+          background-position: right;
+        }
+        @bottom-center {
+          content: "Страница " counter(page) " из " counter(pages);
+          width: 100%;
+          height: 100%;
+          vertical-align: top;
+          border-top: 0.5pt solid
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class = "title">
+      <H1>Динамика обращений по классам</H1>
+      <H3>Отчет сформирован {{date}}</H3>
+    </div>
+    <div>
+      {% for class in classes %}
+	    <p style="page-break-before: always" ></p>
+        <h2 style="color: #24943A">Класс № {{class.0}}.</h2>
+		<table style="width: 700px;">
+			<tr>
+				<td align="left"><img style="display: block; width: 450px;" src="file:///{{class.1}}"></td>
+			</tr>
+			<tr>
+				<td align="left"><img style="display: block; width: 600px;" src="file:///{{class.2}}"></td>
+			</tr>
+		</table>
+		<br>
+      {% endfor %}
+    </div>
+  </body>
+</html>
