@@ -39,9 +39,7 @@ def text_preprocessing(dataset, msg_column, min_msg_length, stop_words_set):
 
 def db_init():
     conn = sqlite3.connect('complaint_stat.db')
-    
     cursor = conn.cursor()
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS COMPLAINT_CLASSES 
         (
@@ -51,7 +49,6 @@ def db_init():
             CL_DATE TEXT
         )
     """)
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS CLASSES_LOGO 
         (
@@ -59,10 +56,26 @@ def db_init():
             CL_LOGO BLOB
         )
     """)
-    
     conn.commit()
-    
     conn.close()
+
+
+def clear_classes():
+    conn = sqlite3.connect('complaint_stat.db')
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM COMPLAINT_CLASSES")
+    conn.commit()
+    conn.close()
+    print('All classes deleted')
+
+
+def clear_clusters():
+    conn = sqlite3.connect('complaint_stat.db')
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM CLASSES_LOGO")
+    conn.commit()
+    conn.close()
+    print('All clusters deleted')
 
 
 class Clustering:
@@ -258,9 +271,11 @@ class Clustering:
         pyb.pcolor(self.som.distance_map().T)
         pyb.colorbar()
         if save_image_to_file:
-            fname = 'som.png'
+            if not os.path.isdir(os.path.abspath('target')):
+                os.mkdir(os.path.abspath('target'))
+            fname = os.path.abspath('target/som.png')
             if not self.overwrite:
-                fname = self.free_file_name('som', 'png')
+                fname = self.free_file_name(os.path.abspath('target/som'), 'png')
             pyb.savefig(fname)
         
         import seaborn as sns
@@ -271,9 +286,11 @@ class Clustering:
             ax.annotate(str(format(int(p.get_height()), ',d')), 
                         (p.get_x(), p.get_height()*1.01))
         if save_image_to_file:
-            fname = 'count.png'
+            if not os.path.isdir(os.path.abspath('target')):
+                os.mkdir(os.path.abspath('target'))
+            fname = os.path.abspath('target/count.png')
             if not self.overwrite:
-                fname = self.free_file_name('count', 'png')
+                fname = self.free_file_name(os.path.abspath('target/count'), 'png')
             plt.savefig(fname)
         plt.show()
         
@@ -299,9 +316,11 @@ class Clustering:
         plt.xlabel('X')
         plt.ylabel('Y')
         if save_image_to_file:
-            fname = 'clusters.png'
+            if not os.path.isdir(os.path.abspath('target')):
+                os.mkdir(os.path.abspath('target'))
+            fname = os.path.abspath('target/clusters.png')
             if not self.overwrite:
-                fname = self.free_file_name('clusters', 'png')
+                fname = self.free_file_name(os.path.abspath('target/clusters'), 'png')
             plt.savefig(fname)
         plt.show()
     
@@ -383,7 +402,10 @@ class Clustering:
             plt.imshow(wordcloud, interpolation="bilinear")
             plt.axis("off")
             if save_image_to_file:
-                plt.savefig("cl_" + str(clusters_codes[i]) + ".png")
+                if not os.path.isdir(os.path.abspath('target')):
+                    os.mkdir(os.path.abspath('target'))
+                fname = os.path.abspath('target/cl_' + str(clusters_codes[i]) + '.png')
+                plt.savefig(fname)
             
             if save_image_to_db:
                 self.insert_cluster_logo(clusters_codes[i])
@@ -392,8 +414,8 @@ class Clustering:
     
     def insert_cluster_logo(self, num):
         db_init()
-        
-        filepath = os.path.abspath("cl_" + str(num) + ".png")
+
+        filepath = os.path.abspath('target/cl_' + str(num) + '.png')
         
         with open(filepath, 'rb') as f:
             ablob = f.read()
@@ -439,7 +461,7 @@ class Clustering:
         for i in range(0, len(clusters_list)):
             clusters_doc.append([
                     clusters_codes[i], 
-                    os.path.abspath("cl_" + str(clusters_codes[i]) + ".png"),
+                    os.path.abspath('target/cl_' + str(clusters_codes[i]) + '.png'),
                     pd.DataFrame(list(clusters_orig_low[i])).to_html(
                             header=False, classes=['greenTable']),
                     len(clusters_orig[i]),
@@ -450,10 +472,10 @@ class Clustering:
         template = env.get_template("template.html")
         template_vars = {
                 "date": datetime.datetime.now().strftime("%d.%m.%Y"),
-                "logo_img": os.path.abspath("logo.png").replace("\\", "/"),
-                "som_img": os.path.abspath("som.png").replace("\\", "/"),
-                "count_img": os.path.abspath("count.png").replace("\\", "/"),
-                "clusters_img": os.path.abspath("clusters.png").replace("\\", "/"),
+                "logo_img": os.path.abspath('target/logo.png').replace("\\", "/"),
+                "som_img": os.path.abspath('target/som.png').replace("\\", "/"),
+                "count_img": os.path.abspath('target/count.png').replace("\\", "/"),
+                "clusters_img": os.path.abspath('target/clusters.png').replace("\\", "/"),
                 "clusters": clusters_doc
                 }
         html_out = template.render(template_vars)
@@ -641,17 +663,11 @@ class Classification:
         
         if len(results) > 0:    
             for result in results:
-                filename = "cl_" + str(result[0]) + ".png"
+                if not os.path.isdir(os.path.abspath('target')):
+                    os.mkdir(os.path.abspath('target'))
+                filename = os.path.abspath('target/cl_' + str(result[0]) + '.png')
                 with open(filename, 'wb') as f:
                     f.write(result[1])
-    
-    def clear_classes(self):
-        conn = sqlite3.connect('complaint_stat.db')
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM COMPLAINT_CLASSES")
-        conn.commit()
-        conn.close()
-        print('All classes deleted')
     
     def predict_backup(self, messages, date, clear_db=False, threshold=0.5):
         db_init()
@@ -672,7 +688,7 @@ class Classification:
             class_num = int(unique_classes[i])
             class_rows = frame[frame['class'] == unique_classes[i]]
             self.insert_class_row(class_num, len(class_rows), date)
-            print('class: ' + str(class_num) + ' size: ' + str(len(class_rows)) + '. \tInsert to db successful.')
+            print('class: ' + str(class_num) + ' \t\tsize: ' + str(len(class_rows)) + '. \t\tInsert to db successful.')
     
     def classes_report(self, path):
         self.extract_all_logos()
@@ -704,7 +720,12 @@ class Classification:
             plt.xlabel(u'Дата', **font_label)
             plt.ylabel(u'Размер класса жалоб', **font_label)
             plt.xticks(num_dates, dates, rotation=45)
-            plt.savefig("dyn_" + str(unique_classes[i]) + ".png", bbox_inches='tight')
+
+            if not os.path.isdir(os.path.abspath('target')):
+                os.mkdir(os.path.abspath('target'))
+            filename = os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png')
+
+            plt.savefig(filename, bbox_inches='tight')
             plt.show()
                 
         classes = []
@@ -712,8 +733,8 @@ class Classification:
         for i in range(0, len(unique_classes)):
             classes.append([
                             unique_classes[i],
-                            os.path.abspath("cl_" + str(unique_classes[i]) + ".png"),
-                            os.path.abspath("dyn_" + str(unique_classes[i]) + ".png")
+                            os.path.abspath('target/cl_' + str(unique_classes[i]) + '.png'),
+                            os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png')
                             ])
         
         from jinja2 import Environment, FileSystemLoader
@@ -721,7 +742,7 @@ class Classification:
         template = env.get_template("dynamics.html")
         template_vars = {
                 "date": datetime.datetime.now().strftime("%d.%m.%Y"),
-                "logo_img": os.path.abspath("logo.png").replace("\\", "/"),
+                "logo_img": os.path.abspath('target/logo.png').replace("\\", "/"),
                 "classes": classes
                 }
         html_out = template.render(template_vars)

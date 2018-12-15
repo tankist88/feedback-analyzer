@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 
 import pickle
+import os
 
 import numpy as np
 import pandas as pd
 
 from ComplaintAnalizer import Clustering
 from ComplaintAnalizer import Classification
+from ComplaintAnalizer import clear_classes
+from ComplaintAnalizer import clear_clusters
 
 
 def eval_model(dataset_in, max_features, som_sigma, som_learning_rate):
-    from ComplaintAnalizer import Clustering
     cl_in = Clustering(max_features=max_features,
                        som_threshold=0.55,
                        som_sigma=som_sigma,
@@ -74,7 +76,7 @@ def fill_db(classifier_in, frames_in, date_in):
 
 
 # ============== Clustering ================
-dataset1 = pd.read_csv('data_20150923.csv')
+dataset1 = pd.read_csv('datasets/data_20150923.csv')
 
 frames = [dataset1]
 
@@ -95,11 +97,13 @@ cl = Clustering(max_features=190,
                 msg_column=8,
                 min_msg_length=20)
 cl.stopwords_from_file('complaint_stopwords.txt')
+clear_clusters()
+clear_classes()
 cl.fit(dataset)
 cl.visualize(save_image_to_file=True)
 cl.som_mappings()
 clusters = cl.clusters()
-cl.report('report.pdf')
+cl.report('reports/clusters.pdf')
 
 with open('clusters.pkl', 'wb') as fout:
     pickle.dump(clusters, fout)
@@ -119,54 +123,54 @@ cm = classifier.get_confusion_matrix()
 # ============== Classification predicting ================
 classifier = Classification()
 classifier.stopwords_from_file('complaint_stopwords.txt')
-classifier.clear_classes()
+clear_classes()
 
-files = ['data_2012-04-01.csv',
-         'data_2012-06-01.csv',
-         'data_2012-07-01.csv',
-         'data_2012-08-01.csv',
-         'data_2012-09-01.csv',
-         'data_2012-10-01.csv',
-         'data_2012-11-01.csv',
-         'data_2012-12-01.csv',
-         'data_2013-01-01.csv',
-         'data_2013-02-01.csv',
-         'data_2013-03-01.csv',
-         'data_2013-04-01.csv',
-         'data_2013-05-01.csv',
-         'data_2013-06-01.csv',
-         'data_2013-07-01.csv',
-         'data_2013-08-01.csv',
-         'data_2013-09-01.csv',
-         'data_2013-10-01.csv',
-         'data_2013-11-01.csv',
-         'data_2013-12-01.csv',
-         'data_2014-01-01.csv',
-         'data_2014-02-01.csv',
-         'data_2014-03-01.csv',
-         'data_2014-04-01.csv',
-         'data_2014-05-01.csv',
-         'data_2014-06-01.csv',
-         'data_2014-07-01.csv',
-         'data_2014-08-01.csv',
-         'data_2014-09-01.csv',
-         'data_2014-10-01.csv',
-         'data_2014-11-01.csv',
-         'data_2014-12-01.csv',
-         'data_2015-01-01.csv',
-         'data_2015-02-01.csv',
-         'data_2015-03-01.csv',
-         'data_2015-04-01.csv',
-         'data_2015-05-01.csv',
-         'data_2015-06-01.csv',
-         'data_2015-07-01.csv',
-         'data_2015-08-01.csv',
-         'data_2015-09-01.csv']
+files = ['datasets/data_2012-04-01.csv',
+         'datasets/data_2012-06-01.csv',
+         'datasets/data_2012-07-01.csv',
+         'datasets/data_2012-08-01.csv',
+         'datasets/data_2012-09-01.csv',
+         'datasets/data_2012-10-01.csv',
+         'datasets/data_2012-11-01.csv',
+         'datasets/data_2012-12-01.csv',
+         'datasets/data_2013-01-01.csv',
+         'datasets/data_2013-02-01.csv',
+         'datasets/data_2013-03-01.csv',
+         'datasets/data_2013-04-01.csv',
+         'datasets/data_2013-05-01.csv',
+         'datasets/data_2013-06-01.csv',
+         'datasets/data_2013-07-01.csv',
+         'datasets/data_2013-08-01.csv',
+         'datasets/data_2013-09-01.csv',
+         'datasets/data_2013-10-01.csv',
+         'datasets/data_2013-11-01.csv',
+         'datasets/data_2013-12-01.csv',
+         'datasets/data_2014-01-01.csv',
+         'datasets/data_2014-02-01.csv',
+         'datasets/data_2014-03-01.csv',
+         'datasets/data_2014-04-01.csv',
+         'datasets/data_2014-05-01.csv',
+         'datasets/data_2014-06-01.csv',
+         'datasets/data_2014-07-01.csv',
+         'datasets/data_2014-08-01.csv',
+         'datasets/data_2014-09-01.csv',
+         'datasets/data_2014-10-01.csv',
+         'datasets/data_2014-11-01.csv',
+         'datasets/data_2014-12-01.csv',
+         'datasets/data_2015-01-01.csv',
+         'datasets/data_2015-02-01.csv',
+         'datasets/data_2015-03-01.csv',
+         'datasets/data_2015-04-01.csv',
+         'datasets/data_2015-05-01.csv',
+         'datasets/data_2015-06-01.csv',
+         'datasets/data_2015-07-01.csv',
+         'datasets/data_2015-08-01.csv',
+         'datasets/data_2015-09-01.csv']
 
 for file in files:
-    ds = pd.read_csv(file, header=None)
+    ds = pd.read_csv(os.path.abspath(file), header=None)
     frames = [ds]
     date = file.split(sep='_')[1].split(sep='.')[0]
     fill_db(classifier, frames, date)
 
-classifier.classes_report('dynamics.pdf')
+classifier.classes_report('reports/dynamics.pdf')
