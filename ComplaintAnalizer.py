@@ -225,15 +225,10 @@ class Clustering:
         db_init()
         
         conn = sqlite3.connect('complaint_stat.db')
-        
         cursor = conn.cursor()
-        
         cursor.execute("SELECT CL_NUM FROM CLASSES_LOGO ORDER BY CL_NUM DESC")
-        
         result = cursor.fetchone()
-        
         conn.commit()
-        
         conn.close()
         
         if pd.isnull(result):
@@ -424,9 +419,7 @@ class Clustering:
         
         try:
             cursor = conn.cursor()
-            
             cursor.execute("INSERT INTO CLASSES_LOGO VALUES(?, ?)", (int(num), sqlite3.Binary(ablob)))
-            
             conn.commit()
         except Exception as e:
             print('Exception while insert logo to db')
