@@ -78,6 +78,85 @@ def clear_clusters():
     print('All clusters deleted')
 
 
+def free_file_name(filename, ext):
+    new_filename = str(filename) + '.' + str(ext)
+    index = 1
+    while os.path.isfile(new_filename):
+        new_filename = str(filename) + '_' + str(index) + '.' + str(ext)
+        index = index + 1
+    return new_filename
+
+
+def get_next_cluster_num():
+    db_init()
+
+    conn = sqlite3.connect('complaint_stat.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT CL_NUM FROM CLASSES_LOGO ORDER BY CL_NUM DESC")
+    result = cursor.fetchone()
+    conn.commit()
+    conn.close()
+
+    if pd.isnull(result):
+        return int(0)
+    else:
+        return int(result[0]) + 1
+
+
+def insert_cluster_logo(num):
+    db_init()
+
+    filepath = os.path.abspath('target/cl_' + str(num) + '.png')
+
+    with open(filepath, 'rb') as f:
+        ablob = f.read()
+
+    conn = sqlite3.connect('complaint_stat.db')
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO CLASSES_LOGO VALUES(?, ?)", (int(num), sqlite3.Binary(ablob)))
+        conn.commit()
+    except Exception as e:
+        print('Exception while insert logo to db')
+
+    conn.close()
+
+
+def insert_class_row(num, size, date):
+    conn = sqlite3.connect('complaint_stat.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO COMPLAINT_CLASSES VALUES(null, ?, ?, ?)", (num, size, date))
+    conn.commit()
+    conn.close()
+
+
+def get_all_classes():
+    conn = sqlite3.connect('complaint_stat.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM COMPLAINT_CLASSES")
+    results = cursor.fetchall()
+    # TODO Add sorting by date ASC (CL_DATE)
+    conn.close()
+    return results
+
+
+def extract_all_logos():
+    conn = sqlite3.connect('complaint_stat.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT CL_NUM, CL_LOGO FROM CLASSES_LOGO")
+    results = cursor.fetchall()
+    conn.close()
+
+    if len(results) > 0:
+        for result in results:
+            if not os.path.isdir(os.path.abspath('target')):
+                os.mkdir(os.path.abspath('target'))
+            filename = os.path.abspath('target/cl_' + str(result[0]) + '.png')
+            with open(filename, 'wb') as f:
+                f.write(result[1])
+
+
 class Clustering:
     def __init__(self, 
                  max_features=250,
@@ -117,8 +196,7 @@ class Clustering:
 
         cluster = cluster[np.argsort(cluster[:, 2])]
 
-        cluster_length = 0
-        if limit > 0 and limit < len(cluster):
+        if 0 < limit < len(cluster):
             cluster_length = limit
         else:
             cluster_length = len(cluster)
@@ -144,7 +222,7 @@ class Clustering:
         fname = 'som_' + str(self.max_features) + '_' + str(self.som_size) + '_' + str(self.som_sigma).replace(".", "_") + '_' + str(self.som_learning_rate).replace(".", "_")
         
         if not self.overwrite:
-            fname = self.free_file_name(fname, 'pkl')
+            fname = free_file_name(fname, 'pkl')
         else:
             fname = fname + '.pkl'
 
@@ -192,10 +270,10 @@ class Clustering:
         dist_array = np.array(indexes_dist).reshape(int(len(indexes_dist)), 1)
         
         from hdbscan import HDBSCAN
-        hdbscan = HDBSCAN(min_cluster_size=5)
-        y_pred = hdbscan.fit_predict(coord_array)
+        clustering = HDBSCAN(min_cluster_size=5)
+        y_pred = clustering.fit_predict(coord_array)
         
-        next_cluster_num = self.get_next_cluster_num()
+        next_cluster_num = get_next_cluster_num()
         
         self.y = []
         filtered_coords = []
@@ -221,21 +299,6 @@ class Clustering:
         print('Cluster codes (' + str(self.n_clusters) + '):')
         print(clusters_codes)
     
-    def get_next_cluster_num(self):
-        db_init()
-        
-        conn = sqlite3.connect('complaint_stat.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT CL_NUM FROM CLASSES_LOGO ORDER BY CL_NUM DESC")
-        result = cursor.fetchone()
-        conn.commit()
-        conn.close()
-        
-        if pd.isnull(result):
-            return int(0)
-        else:
-            return int(result[0]) + 1
-    
     def som_mappings(self):
         self.mappings = self.som.win_map(self.X_scale)
     
@@ -251,14 +314,6 @@ class Clustering:
             density_list.append(self.index_array[i, 2])
         return np.array(density_list, dtype='float64').mean()
     
-    def free_file_name(self, fname, ext):
-        new_fname = str(fname) + '.' + str(ext)
-        index = 1
-        while os.path.isfile(new_fname):
-            new_fname = str(fname) + '_' + str(index) + '.' + str(ext)
-            index = index + 1
-        return new_fname
-    
     def visualize(self, save_image_to_file=False):
         import pylab as pyb
         pyb.figure(figsize=(7, 5))
@@ -270,7 +325,7 @@ class Clustering:
                 os.mkdir(os.path.abspath('target'))
             fname = os.path.abspath('target/som.png')
             if not self.overwrite:
-                fname = self.free_file_name(os.path.abspath('target/som'), 'png')
+                fname = free_file_name(os.path.abspath('target/som'), 'png')
             pyb.savefig(fname)
         
         import seaborn as sns
@@ -285,7 +340,7 @@ class Clustering:
                 os.mkdir(os.path.abspath('target'))
             fname = os.path.abspath('target/count.png')
             if not self.overwrite:
-                fname = self.free_file_name(os.path.abspath('target/count'), 'png')
+                fname = free_file_name(os.path.abspath('target/count'), 'png')
             plt.savefig(fname)
         plt.show()
         
@@ -315,7 +370,7 @@ class Clustering:
                 os.mkdir(os.path.abspath('target'))
             fname = os.path.abspath('target/clusters.png')
             if not self.overwrite:
-                fname = self.free_file_name(os.path.abspath('target/clusters'), 'png')
+                fname = free_file_name(os.path.abspath('target/clusters'), 'png')
             plt.savefig(fname)
         plt.show()
     
@@ -403,28 +458,9 @@ class Clustering:
                 plt.savefig(fname)
             
             if save_image_to_db:
-                self.insert_cluster_logo(clusters_codes[i])
+                insert_cluster_logo(clusters_codes[i])
             
             plt.show()
-    
-    def insert_cluster_logo(self, num):
-        db_init()
-
-        filepath = os.path.abspath('target/cl_' + str(num) + '.png')
-        
-        with open(filepath, 'rb') as f:
-            ablob = f.read()
-        
-        conn = sqlite3.connect('complaint_stat.db')
-        
-        try:
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO CLASSES_LOGO VALUES(?, ?)", (int(num), sqlite3.Binary(ablob)))
-            conn.commit()
-        except Exception as e:
-            print('Exception while insert logo to db')
-        
-        conn.close()
     
     def set_additional_stopwords(self, add_stop_words):
         prev_length = len(self.stop_words_set)
@@ -632,46 +668,18 @@ class Classification:
         
         return y_pred
     
-    def insert_class_row(self, num, size, date):
-        conn = sqlite3.connect('complaint_stat.db')
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO COMPLAINT_CLASSES VALUES(null, ?, ?, ?)", (num, size, date))
-        conn.commit()
-        conn.close()
-        
-    def show_all_classes(self):
-        conn = sqlite3.connect('complaint_stat.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM COMPLAINT_CLASSES")
-        results = cursor.fetchall()
-        conn.close()
-        return results
-    
-    def extract_all_logos(self):
-        conn = sqlite3.connect('complaint_stat.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT CL_NUM, CL_LOGO FROM CLASSES_LOGO")
-        results = cursor.fetchall()
-        conn.close()
-
-        if len(results) > 0:    
-            for result in results:
-                if not os.path.isdir(os.path.abspath('target')):
-                    os.mkdir(os.path.abspath('target'))
-                filename = os.path.abspath('target/cl_' + str(result[0]) + '.png')
-                with open(filename, 'wb') as f:
-                    f.write(result[1])
-    
     def predict_backup(self, messages, date, clear_db=False, threshold=0.5):
         db_init()
         
         if clear_db:
-            self.clear_classes()
+            clear_classes()
             print('All classes deleted')
         
         y_pred = self.predict(messages=messages, threshold=threshold)
         
-        frame = pd.DataFrame(np.concatenate((y_pred.reshape(len(y_pred), 1), messages), axis=1), columns=['class', 'message'])
+        frame = pd.DataFrame(
+            np.concatenate((y_pred.reshape(len(y_pred), 1), messages), axis=1), columns=['class', 'message']
+        )
         
         unique_classes = frame['class'].unique()
         
@@ -680,12 +688,12 @@ class Classification:
         for i in range(0, len(unique_classes)):
             class_num = int(unique_classes[i])
             class_rows = frame[frame['class'] == unique_classes[i]]
-            self.insert_class_row(class_num, len(class_rows), date)
+            insert_class_row(class_num, len(class_rows), date)
             print('class: ' + str(class_num) + ' \t\tsize: ' + str(len(class_rows)) + '. \t\tInsert to db successful.')
     
     def classes_report(self, path):
-        self.extract_all_logos()
-        rows = self.show_all_classes()
+        extract_all_logos()
+        rows = get_all_classes()
 
         all_classes = np.array(([row[1] for row in rows]), dtype='int')
         
