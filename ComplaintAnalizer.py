@@ -43,17 +43,26 @@ def db_init():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS COMPLAINT_CLASSES 
         (
-            ID INTEGER PRIMARY KEY AUTOINCREMENT, 
-            CL_NUM INTEGER, 
-            CL_SIZE INTEGER, 
-            CL_DATE TEXT
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            CL_NUM INTEGER NOT NULL, 
+            CL_SIZE INTEGER NOT NULL, 
+            CL_DATE TEXT NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS COMPLAINT_MESSAGES 
+        (
+            ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            CL_ID INTEGER NOT NULL FOREIGN KEY REFERENCES COMPLAINT_CLASSES(ID), 
+            CL_NUM INTEGER NOT NULL, 
+            CL_MSG TEXT NOT NULL
         )
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS CLASSES_LOGO 
         (
             CL_NUM INTEGER PRIMARY KEY, 
-            CL_LOGO BLOB
+            CL_LOGO BLOB NOT NULL
         )
     """)
     conn.commit()
@@ -128,15 +137,25 @@ def insert_class_row(num, size, date):
     cursor = conn.cursor()
     cursor.execute("INSERT INTO COMPLAINT_CLASSES VALUES(null, ?, ?, ?)", (num, size, date))
     conn.commit()
+    cursor.execute("SELECT ID FROM COMPLAINT_CLASSES ORDER BY ID DESC")
+    cl_id = cursor.fetchone()
+    conn.close()
+    return int(cl_id[0])
+
+
+def insert_msg_row(cl_id, num, msg):
+    conn = sqlite3.connect('complaint_stat.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO COMPLAINT_MESSAGES VALUES(null, ?, ?, ?)", (cl_id, num, msg))
+    conn.commit()
     conn.close()
 
 
 def get_all_classes():
     conn = sqlite3.connect('complaint_stat.db')
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM COMPLAINT_CLASSES")
+    cursor.execute("SELECT * FROM COMPLAINT_CLASSES ORDER BY date(CL_DATE) ASC")
     results = cursor.fetchall()
-    # TODO Add sorting by date ASC (CL_DATE)
     conn.close()
     return results
 
@@ -688,7 +707,14 @@ class Classification:
         for i in range(0, len(unique_classes)):
             class_num = int(unique_classes[i])
             class_rows = frame[frame['class'] == unique_classes[i]]
-            insert_class_row(class_num, len(class_rows), date)
+            cl_id = insert_class_row(class_num, len(class_rows), date)
+
+            count = 10
+            for cl in range(0, len(y_pred)):
+                if y_pred[cl] == class_num:
+                    if count > 0:
+                        insert_msg_row(cl_id, class_num, messages[cl])
+
             print('class: ' + str(class_num) + ' \t\tsize: ' + str(len(class_rows)) + '. \t\tInsert to db successful.')
     
     def classes_report(self, path):
