@@ -245,11 +245,11 @@ class Clustering:
     def get_corpus(self):
         return self.corpus
     
-    def score(self):
-        dlist = []
+    def mean_density(self):
+        density_list = []
         for i in range(0, len(self.index_array)):
-            dlist.append(self.index_array[i, 2])
-        return np.array(dlist, dtype='float64').mean()
+            density_list.append(self.index_array[i, 2])
+        return np.array(density_list, dtype='float64').mean()
     
     def free_file_name(self, fname, ext):
         new_fname = str(fname) + '.' + str(ext)
@@ -291,7 +291,7 @@ class Clustering:
         
         available_colors = ['red', 'blue', 'green', 'cyan', 'magenta', 'orange',
                             'yellow', 'brown', 'grey', 'navy', 'purple', 'lightcoral',
-                            'lime', 'steelblue', 'indigo','olive', 'khaki', 'crimson',
+                            'lime', 'steelblue', 'indigo', 'olive', 'khaki', 'crimson',
                             'slateblue', 'gold', 'darkseagreen', 'violet', 'black']
         plt.figure(figsize=(7, 6))
         
@@ -520,7 +520,7 @@ class Classification:
         
         from sklearn.feature_extraction.text import CountVectorizer
         cv = CountVectorizer(max_features=self.max_features)
-        X = cv.fit_transform(corpus).toarray()
+        x = cv.fit_transform(corpus).toarray()
         y = [row[class_column] for row in dataset]
         y = np.array(y, dtype='int')
 
@@ -528,17 +528,17 @@ class Classification:
 
         # Splitting the dataset into the Training set and Test set
         from sklearn.cross_validation import train_test_split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, random_state=0)
         
         print('Complete spliting into the Training set and Test set')
         
         # Applying LDA
         from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
         lda = LDA(n_components=50)
-        X_train = lda.fit_transform(X_train, y_train)
-        X_test = lda.transform(X_test)
+        x_train = lda.fit_transform(x_train, y_train)
+        x_test = lda.transform(x_test)
         
-        print('Complete Applying LDA. Found components: ' + str(len(X_train[0])))
+        print('Complete Applying LDA. Found components: ' + str(len(x_train[0])))
         
         categories = pd.DataFrame(y)[0].unique()
 
@@ -559,16 +559,16 @@ class Classification:
         from keras.layers import Dense
         
         classifier = Sequential()
-        classifier.add(Dense(output_dim=len(X_train[0]), init='uniform', activation=act_func, input_dim=len(X_train[0])))
+        classifier.add(Dense(output_dim=len(x_train[0]), init='uniform', activation=act_func, input_dim=len(x_train[0])))
         for i in range(0, hidden_layers):
-            classifier.add(Dense(output_dim=len(X_train[0]), init='uniform', activation=act_func))
+            classifier.add(Dense(output_dim=len(x_train[0]), init='uniform', activation=act_func))
         classifier.add(Dense(output_dim=len(categories), init='uniform', activation='sigmoid'))
         classifier.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         
         print('Complete create arch of NN and compile')
         
         # Fitting the ANN to the Training set
-        classifier.fit(X_train, y_nn_train, batch_size=batch_size, nb_epoch=nb_epoch)
+        classifier.fit(x_train, y_nn_train, batch_size=batch_size, nb_epoch=nb_epoch)
         
         print('Complete fitting NN')
         
@@ -576,7 +576,7 @@ class Classification:
             pickle.dump((categories, cv, lda, classifier), fout)
         
         # Predicting the Test set results
-        y_pred_nn = classifier.predict(X_test)
+        y_pred_nn = classifier.predict(x_test)
         
         out = []
         for i in range(0, len(y_pred_nn)):
@@ -653,7 +653,7 @@ class Classification:
         cursor.execute("SELECT CL_NUM, CL_LOGO FROM CLASSES_LOGO")
         results = cursor.fetchall()
         conn.close()
-        
+
         if len(results) > 0:    
             for result in results:
                 if not os.path.isdir(os.path.abspath('target')):

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import pickle
 import os
 
@@ -12,7 +10,7 @@ from ComplaintAnalizer import clear_classes
 from ComplaintAnalizer import clear_clusters
 
 
-def eval_model(dataset_in, max_features, som_sigma, som_learning_rate):
+def eval_clustering(dataset_in, max_features, som_sigma, som_learning_rate):
     cl_in = Clustering(max_features=max_features,
                        som_threshold=0.55,
                        som_sigma=som_sigma,
@@ -21,33 +19,33 @@ def eval_model(dataset_in, max_features, som_sigma, som_learning_rate):
                        min_msg_length=20)
     cl_in.stopwords_from_file('complaint_stopwords.txt')
     cl_in.fit(dataset_in)
-    return cl_in.score()
+    return cl_in.mean_density()
 
 
-def model_scores(dataset_in):
+def model_densities(dataset_in):
     max_features_arr = np.array([250])
     som_sigma_arr = np.array([1.0, 1.3])
     som_learning_rate_arr = np.array([0.5, 0.7])
-    
-    scores = []
+
+    densities = []
     
     for index in range(0, len(max_features_arr)):
         for j in range(0, len(som_sigma_arr)):
             for k in range(0, len(som_learning_rate_arr)):
-                score = eval_model(dataset_in,
-                                   max_features_arr[index],
-                                   som_sigma_arr[j],
-                                   som_learning_rate_arr[k])
-                result = list()
-                result.append(score)
-                result.append(max_features_arr[index])
-                result.append(som_sigma_arr[j])
-                result.append(som_learning_rate_arr[k])
+                density = eval_clustering(dataset_in,
+                                          max_features_arr[index],
+                                          som_sigma_arr[j],
+                                          som_learning_rate_arr[k])
+                row = list()
+                row.append(density)
+                row.append(max_features_arr[index])
+                row.append(som_sigma_arr[j])
+                row.append(som_learning_rate_arr[k])
                 print("---------------------")
-                print(result)
+                print(row)
                 print("---------------------")
-                scores.append(np.array(result, dtype='float64'))
-    return np.array(scores, dtype='float64')
+                densities.append(np.array(row, dtype='float64'))
+    return np.array(densities, dtype='float64')
 
 
 def get_messages(frames_in):
@@ -72,8 +70,6 @@ def fill_db(classifier_in, frames_in, date_in):
                                      clear_db=False,
                                      threshold=0.00000001)
 
-# scores = model_scores(dataset)
-
 
 # ============== Clustering ================
 dataset1 = pd.read_csv('datasets/data_20150923.csv')
@@ -89,6 +85,8 @@ for i in range(0, len(dataset)):
     filtered_dataset.append(dataset[i])
 
 dataset = np.array(filtered_dataset)
+
+# densities = model_densities(dataset)
 
 cl = Clustering(max_features=190,
                 som_threshold=0.35,
