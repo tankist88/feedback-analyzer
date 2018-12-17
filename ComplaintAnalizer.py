@@ -53,9 +53,10 @@ def db_init():
         CREATE TABLE IF NOT EXISTS COMPLAINT_MESSAGES 
         (
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
-            CL_ID INTEGER NOT NULL FOREIGN KEY REFERENCES COMPLAINT_CLASSES(ID), 
+            CL_ID INTEGER NOT NULL, 
             CL_NUM INTEGER NOT NULL, 
-            CL_MSG TEXT NOT NULL
+            CL_MSG TEXT NOT NULL, 
+            FOREIGN KEY(CL_ID) REFERENCES COMPLAINT_CLASSES(ID)
         )
     """)
     cursor.execute("""
@@ -70,15 +71,18 @@ def db_init():
 
 
 def clear_classes():
+    db_init()
     conn = sqlite3.connect('complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("DELETE FROM COMPLAINT_CLASSES")
+    cursor.execute("DELETE FROM COMPLAINT_MESSAGES")
     conn.commit()
     conn.close()
     print('All classes deleted')
 
 
 def clear_clusters():
+    db_init()
     conn = sqlite3.connect('complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("DELETE FROM CLASSES_LOGO")
@@ -158,6 +162,15 @@ def get_all_classes():
     results = cursor.fetchall()
     conn.close()
     return results
+
+
+def get_messages_by_class_id(cl_id):
+    conn = sqlite3.connect('complaint_stat.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT CL_MSG FROM COMPLAINT_MESSAGES WHERE CL_ID=?", (cl_id,))
+    results = cursor.fetchall()
+    conn.close()
+    return np.array(([row[0] for row in results]))
 
 
 def extract_all_logos():
@@ -424,12 +437,12 @@ class Clustering:
             cl_code = clusters_codes[n]
             if cl_code < 0:
                 continue
-            X_rows = self.get_original_x_rows_for_cluster(cl_code, limit)
+            x_rows = self.get_original_x_rows_for_cluster(cl_code, limit)
             values = set()
             orig_values = set()
-            for i in range(0, len(X_rows)):
+            for i in range(0, len(x_rows)):
                 for j in range(0, len(self.X)):
-                    if (X_rows[i] == self.X[j]).all() and self.orig[j] not in orig_values:
+                    if (x_rows[i] == self.X[j]).all() and self.orig[j] not in orig_values:
                         orig_values.add(self.orig[j])
                         review = get_prepared_word_array(self.orig[j])                        
                         filtered_review = []
@@ -466,9 +479,9 @@ class Clustering:
             if len(clusters_list[i]) == 0:
                 print("Empty cluster #" + str(clusters_codes[i]))
                 continue
-            wordcloud = WordCloud(max_font_size=40, background_color="white").generate(clusters_list[i])
-            plt.figure(figsize=(7,4))
-            plt.imshow(wordcloud, interpolation="bilinear")
+            word_cloud = WordCloud(max_font_size=40, background_color="white").generate(clusters_list[i])
+            plt.figure(figsize=(7, 4))
+            plt.imshow(word_cloud, interpolation="bilinear")
             plt.axis("off")
             if save_image_to_file:
                 if not os.path.isdir(os.path.abspath('target')):
@@ -571,7 +584,7 @@ class Classification:
                                           min_msg_length,
                                           self.stop_words_set)
         
-        print('Complete text preprocessing')
+        print('Complete text pre processing')
         
         from sklearn.feature_extraction.text import CountVectorizer
         cv = CountVectorizer(max_features=self.max_features)
@@ -585,7 +598,7 @@ class Classification:
         from sklearn.cross_validation import train_test_split
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, random_state=0)
         
-        print('Complete spliting into the Training set and Test set')
+        print('Complete splitting into the Training set and Test set')
         
         # Applying LDA
         from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
@@ -713,7 +726,8 @@ class Classification:
             for cl in range(0, len(y_pred)):
                 if y_pred[cl] == class_num:
                     if count > 0:
-                        insert_msg_row(cl_id, class_num, messages[cl])
+                        insert_msg_row(cl_id, class_num, str(messages[cl][0]))
+                        count -= 1
 
             print('class: ' + str(class_num) + ' \t\tsize: ' + str(len(class_rows)) + '. \t\tInsert to db successful.')
     
@@ -722,6 +736,7 @@ class Classification:
         rows = get_all_classes()
 
         all_classes = np.array(([row[1] for row in rows]), dtype='int')
+        all_ids = np.array(([row[0] for row in rows]), dtype='int')
         
         unique_classes = pd.DataFrame(all_classes, columns=['class'])['class'].unique()
         
@@ -741,7 +756,7 @@ class Classification:
             
             font_label = {'fontname': 'Arial', 'fontsize': '17'}
             font_title = {'fontname': 'Arial', 'fontsize': '20'}
-            plt.figure(figsize=(10, 5))
+            plt.figure(figsize=(10, 3))
             plt.bar(num_dates, sizes, width=1.0)
             plt.title(u'Кластер ' + str(unique_classes[i]), **font_title)
             plt.xlabel(u'Дата', **font_label)
@@ -757,11 +772,22 @@ class Classification:
                 
         classes = []
 
+        pd.set_option('display.max_colwidth', -1)
+
+        reversed_all_classes = all_classes[::-1]
+        reversed_all_ids = all_ids[::-1]
         for i in range(0, len(unique_classes)):
+            messages = list()
+            for j in range(0, len(reversed_all_classes)):
+                if unique_classes[i] == reversed_all_classes[j]:
+                    messages = get_messages_by_class_id(int(reversed_all_ids[j]))
+                    break
+
             classes.append([
                             unique_classes[i],
                             os.path.abspath('target/cl_' + str(unique_classes[i]) + '.png'),
-                            os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png')
+                            os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png'),
+                            pd.DataFrame(messages).to_html(header=False, classes=['greenTable'])
                             ])
         
         from jinja2 import Environment, FileSystemLoader
