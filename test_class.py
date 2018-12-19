@@ -3,6 +3,9 @@ import os
 
 import numpy as np
 import pandas as pd
+import seaborn as sns
+
+import matplotlib.patheffects as PathEffects
 
 from ComplaintAnalizer import Clustering
 from ComplaintAnalizer import Classification
@@ -97,6 +100,75 @@ cl = Clustering(max_features=190,
 cl.stopwords_from_file('complaint_stopwords.txt')
 clear_clusters()
 clear_classes()
+
+from ComplaintAnalizer import text_preprocessing
+corpus, orig = text_preprocessing(dataset, 8, 30, cl.get_stop_words_set())
+from sklearn.feature_extraction.text import CountVectorizer
+cv = CountVectorizer(max_features=190)
+X = cv.fit_transform(corpus).toarray()
+
+from sklearn.decomposition import PCA
+pca = PCA(n_components=99)
+X_pca = pca.fit_transform(X)
+explained_variance = pca.explained_variance_ratio_
+print('Cumulative explained variation for 50 principal components: {}'.format(np.sum(pca.explained_variance_ratio_)))
+
+
+from sklearn.manifold import TSNE
+tsne = TSNE(n_components=2, verbose=1, perplexity=40, n_iter=1500)
+tsne_results = tsne.fit_transform(X_pca)
+
+df = pd.DataFrame(columns=['X', 'Y'])
+df['X'] = tsne_results[:, 0]
+df['Y'] = tsne_results[:, 1]
+
+from hdbscan import HDBSCAN
+clustering = HDBSCAN(min_cluster_size=29)
+cl_X = df.values
+y_pred = clustering.fit_predict(cl_X)
+n_clusters = y_pred.max() + 1
+
+print('n_clusters: ' + str(n_clusters))
+
+
+import matplotlib.pyplot as plt
+plt.scatter(tsne_results[:, 0],
+            tsne_results[:, 1],
+            s=25,
+            c='black',
+            edgecolors='none',
+            label='Clusters ')
+plt.title('Clusters')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.show()
+
+available_colors = ['red', 'blue', 'green', 'cyan', 'magenta', 'orange',
+                    'yellow', 'brown', 'grey', 'navy', 'purple', 'lightcoral',
+                    'lime', 'steelblue', 'indigo', 'olive', 'khaki', 'crimson',
+                    'slateblue', 'gold', 'darkseagreen', 'violet', 'black']
+plt.figure(figsize=(7, 6))
+
+clusters_codes = pd.DataFrame(y_pred, columns=['cl'])['cl'].unique()
+
+for i in range(0, n_clusters):
+    cl_code = clusters_codes[i]
+    if cl_code < 0:
+        continue
+    plt.scatter(cl_X[y_pred == cl_code, 0],
+                cl_X[y_pred == cl_code, 1],
+                s=25,
+                c=available_colors[i],
+                edgecolors='none',
+                label='Cluster ' + str(cl_code))
+plt.title('Clusters')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.savefig("test.png")
+plt.show()
+
+
+
 cl.fit(dataset)
 cl.visualize(save_image_to_file=True)
 cl.som_mappings()
