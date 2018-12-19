@@ -1,6 +1,7 @@
 import numpy as np
 import datetime
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 import re
 import os
@@ -192,24 +193,16 @@ def extract_all_logos():
 class Clustering:
     def __init__(self, 
                  max_features=250,
-                 som_threshold=0.5,
-                 som_size=100,
-                 som_sigma=1.0,
-                 som_learning_rate=0.5,
                  msg_column=0,
                  min_msg_length=30,
                  period_start='____________',
                  period_end='____________',
                  overwrite=True):
         self.max_features = max_features
-        self.som_threshold = som_threshold
         self.msg_column = msg_column
         self.min_msg_length = min_msg_length
         self.period_start = period_start
         self.period_end = period_end
-        self.som_size = som_size
-        self.som_sigma = som_sigma
-        self.som_learning_rate = som_learning_rate
         self.overwrite = overwrite
         
         import nltk
@@ -232,18 +225,30 @@ class Clustering:
             cluster_length = limit
         else:
             cluster_length = len(cluster)
-
-        for i in range(0, cluster_length):
-            if limit > 0:
-                print('cluster[' + str(i) + ']: ' + str(cluster[i][2]))
-            array_of_arrays = self.mappings[(cluster[i][0], cluster[i][1])]
-            for j in range(0, len(array_of_arrays)):
-                cluster_lines.append(array_of_arrays[j])
-        if len(cluster_lines) > 0:
-            cluster_lines = self.sc.inverse_transform(np.array(cluster_lines))
+            
+        try:
+            self.mappings
+            for i in range(0, cluster_length):
+                if limit > 0:
+                    print('cluster[' + str(i) + ']: ' + str(cluster[i][2]))
+                array_of_arrays = self.mappings[(cluster[i][0], cluster[i][1])]
+                for j in range(0, len(array_of_arrays)):
+                    cluster_lines.append(array_of_arrays[j])
+            if len(cluster_lines) > 0:
+                cluster_lines = self.sc.inverse_transform(np.array(cluster_lines))
+        except AttributeError:
+            for i in range(0, cluster_length):
+                cluster_lines.append(cluster[i])
+            if len(cluster_lines) > 0:
+                cluster_lines = self.pca.inverse_transform(np.array(cluster_lines))
         return cluster_lines
     
-    def fit(self, dataset):
+    def fit_som(self, 
+                dataset, 
+                som_threshold=0.5, 
+                som_size=100, 
+                som_sigma=1.0, 
+                som_learning_rate=0.5):
         self.corpus, self.orig = text_preprocessing(dataset, 
                                                     self.msg_column, 
                                                     self.min_msg_length, 
@@ -251,7 +256,7 @@ class Clustering:
         
         print("corpus length: " + str(len(self.corpus)))
             
-        fname = 'som_' + str(self.max_features) + '_' + str(self.som_size) + '_' + str(self.som_sigma).replace(".", "_") + '_' + str(self.som_learning_rate).replace(".", "_")
+        fname = 'som_' + str(self.max_features) + '_' + str(som_size) + '_' + str(som_sigma).replace(".", "_") + '_' + str(som_learning_rate).replace(".", "_")
         
         if not self.overwrite:
             fname = free_file_name(fname, 'pkl')
@@ -270,11 +275,11 @@ class Clustering:
             self.X_scale = self.sc.fit_transform(self.X)
             
             from minisom import MiniSom
-            self.som = MiniSom(x=self.som_size,
-                               y=self.som_size,
+            self.som = MiniSom(x=som_size,
+                               y=som_size,
                                input_len=self.max_features,
-                               sigma=self.som_sigma,
-                               learning_rate=self.som_learning_rate)
+                               sigma=som_sigma,
+                               learning_rate=som_learning_rate)
             self.som.train_batch(data=self.X_scale, num_iteration=len(self.X_scale))
             with open(fname, 'wb') as file:
                 pickle.dump((cv, self.sc, self.som), file)
@@ -293,7 +298,7 @@ class Clustering:
         indexes_dist = []
         for i in range(0, len(distance_map)):
             for j in range(0, len(distance_map[i])):
-                if distance_map[i, j] < self.som_threshold:
+                if distance_map[i, j] < som_threshold:
                     indexes_coords.append(i)
                     indexes_coords.append(j)
                     indexes_dist.append(distance_map[i, j])
@@ -330,7 +335,92 @@ class Clustering:
         
         print('Cluster codes (' + str(self.n_clusters) + '):')
         print(clusters_codes)
+        
+    def fit_tsne(self, 
+                 dataset, 
+                 min_cluster_size=55, 
+                 perplexity=40, 
+                 n_iter=2500, 
+                 learning_rate=700.0, 
+                 n_components=107):
+        self.corpus, self.orig = text_preprocessing(dataset, 
+                                                    self.msg_column, 
+                                                    self.min_msg_length, 
+                                                    self.stop_words_set)
+        
+        print("corpus length: " + str(len(self.corpus)))
+            
+        fname = 'tsne_' + str(self.max_features) + '_' + str(n_iter) + '_' +  str(n_components) + '_' + str(perplexity).replace(".", "_") + '_' + str(learning_rate).replace(".", "_")
+        
+        if not self.overwrite:
+            fname = free_file_name(fname, 'pkl')
+        else:
+            fname = fname + '.pkl'
+
+        print("Using t-SNE model file: " + str(fname))
+        
+        if not os.path.isfile(fname):
+            from sklearn.feature_extraction.text import CountVectorizer
+            cv = CountVectorizer(max_features=self.max_features)
+            self.X = cv.fit_transform(self.corpus).toarray()
+            
+            from sklearn.decomposition import PCA
+            self.pca = PCA(n_components=n_components)
+            x_pca = self.pca.fit_transform(self.X)
+            print('Cumulative explained variation for principal components: {}'.format(np.sum(self.pca.explained_variance_ratio_)))
+            
+            from sklearn.manifold import TSNE
+            tsne = TSNE(n_components=2, 
+                        verbose=1, 
+                        perplexity=perplexity, 
+                        n_iter=n_iter, 
+                        learning_rate=learning_rate)
+            tsne_results = tsne.fit_transform(x_pca)            
+            with open(fname, 'wb') as file:
+                pickle.dump((cv, self.pca, tsne_results), file)
+        else:
+            with open(fname, 'rb') as file:  
+                cv, self.pca, tsne_results = pickle.load(file)
+            self.X = cv.fit_transform(self.corpus).toarray()
+            self.x_pca = self.pca.fit_transform(self.X)
+        
+        print('X rows: ' + str(len(self.X)))
+        print('X cols: ' + str(len(self.X[0])))
+        
+        df = pd.DataFrame(columns=['X', 'Y'])
+        df['X'] = tsne_results[:, 0]
+        df['Y'] = tsne_results[:, 1]
+
+        values = df.values
+        
+        from hdbscan import HDBSCAN
+        clustering = HDBSCAN(min_cluster_size=min_cluster_size)
+        y_pred = clustering.fit_predict(values)
+        
+        next_cluster_num = get_next_cluster_num()
+        
+        self.y = []
+        filtered_values = []
+        for i in range(0, len(y_pred)):
+            if y_pred[i] < 0:
+                continue
+            filtered_values.append(values[i])
+            self.y.append(int(y_pred[i]) + int(next_cluster_num))
+        
+        print('Next cluster num: ' + str(next_cluster_num))
+        
+        clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
+        
+        self.n_clusters = len(clusters_codes)
+        
+        self.index_array = np.concatenate((filtered_values, np.zeros((len(filtered_values), 1), dtype='float')), axis=1)
+        
+        print('Cluster codes (' + str(self.n_clusters) + '):')
+        print(clusters_codes)
     
+    def get_index_array(self):
+        return self.index_array
+        
     def som_mappings(self):
         self.mappings = self.som.win_map(self.X_scale)
     
@@ -346,19 +436,20 @@ class Clustering:
             density_list.append(self.index_array[i, 2])
         return np.array(density_list, dtype='float64').mean()
     
-    def visualize(self, save_image_to_file=False):
-        import pylab as pyb
-        pyb.figure(figsize=(7, 5))
-        pyb.bone()
-        pyb.pcolor(self.som.distance_map().T)
-        pyb.colorbar()
-        if save_image_to_file:
-            if not os.path.isdir(os.path.abspath('target')):
-                os.mkdir(os.path.abspath('target'))
-            fname = os.path.abspath('target/som.png')
-            if not self.overwrite:
-                fname = free_file_name(os.path.abspath('target/som'), 'png')
-            pyb.savefig(fname)
+    def visualize(self, save_image_to_file=False, show_som_map=False):
+        if show_som_map:
+            import pylab as pyb
+            pyb.figure(figsize=(7, 5))
+            pyb.bone()
+            pyb.pcolor(self.som.distance_map().T)
+            pyb.colorbar()
+            if save_image_to_file:
+                if not os.path.isdir(os.path.abspath('target')):
+                    os.mkdir(os.path.abspath('target'))
+                fname = os.path.abspath('target/som.png')
+                if not self.overwrite:
+                    fname = free_file_name(os.path.abspath('target/som'), 'png')
+                pyb.savefig(fname)
         
         import seaborn as sns
         plt.figure(figsize=(7, 3))
@@ -376,10 +467,6 @@ class Clustering:
             plt.savefig(fname)
         plt.show()
         
-        available_colors = ['red', 'blue', 'green', 'cyan', 'magenta', 'orange',
-                            'yellow', 'brown', 'grey', 'navy', 'purple', 'lightcoral',
-                            'lime', 'steelblue', 'indigo', 'olive', 'khaki', 'crimson',
-                            'slateblue', 'gold', 'darkseagreen', 'violet', 'black']
         plt.figure(figsize=(7, 6))
         
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
@@ -391,7 +478,7 @@ class Clustering:
             plt.scatter(self.index_array[self.y == cl_code, 0], 
                         self.index_array[self.y == cl_code, 1], 
                         s=25,
-                        c=available_colors[i],
+                        c=matplotlib.cm.spectral(float(i) / self.n_clusters),
                         edgecolors='none', 
                         label='Cluster ' + str(cl_code))
         plt.title('Clusters')
