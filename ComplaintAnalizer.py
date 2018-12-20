@@ -237,10 +237,12 @@ class Clustering:
             if len(cluster_lines) > 0:
                 cluster_lines = self.sc.inverse_transform(np.array(cluster_lines))
         except AttributeError:
-            for i in range(0, cluster_length):
-                cluster_lines.append(cluster[i])
-            if len(cluster_lines) > 0:
-                cluster_lines = self.pca.inverse_transform(np.array(cluster_lines))
+            for i in range(0, len(self.y_pred)):
+                if self.y_pred[i] == cluster_num:
+                    cluster_lines.append(self.X[i])
+                if len(cluster_lines) >= cluster_length:
+                    break
+                
         return cluster_lines
     
     def fit_som(self, 
@@ -322,6 +324,8 @@ class Clustering:
             filtered_dists.append(dist_array[i])
             self.y.append(int(y_pred[i]) + int(next_cluster_num))
         
+        self.y = np.array(self.y, dtype='int')
+        
         print('Next cluster num: ' + str(next_cluster_num))
         
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
@@ -365,8 +369,8 @@ class Clustering:
             self.X = cv.fit_transform(self.corpus).toarray()
             
             from sklearn.decomposition import PCA
-            self.pca = PCA(n_components=n_components)
-            x_pca = self.pca.fit_transform(self.X)
+            pca = PCA(n_components=n_components)
+            x_pca = pca.fit_transform(self.X)
             print('Cumulative explained variation for principal components: {}'.format(np.sum(self.pca.explained_variance_ratio_)))
             
             from sklearn.manifold import TSNE
@@ -375,43 +379,47 @@ class Clustering:
                         perplexity=perplexity, 
                         n_iter=n_iter, 
                         learning_rate=learning_rate)
-            tsne_results = tsne.fit_transform(x_pca)            
+            self.tsne_results = tsne.fit_transform(x_pca)            
             with open(fname, 'wb') as file:
-                pickle.dump((cv, self.pca, tsne_results), file)
+                pickle.dump((cv, pca, self.tsne_results), file)
         else:
             with open(fname, 'rb') as file:  
-                cv, self.pca, tsne_results = pickle.load(file)
+                cv, pca, self.tsne_results = pickle.load(file)
             self.X = cv.fit_transform(self.corpus).toarray()
-            self.x_pca = self.pca.fit_transform(self.X)
+            self.x_pca = pca.fit_transform(self.X)
         
         print('X rows: ' + str(len(self.X)))
         print('X cols: ' + str(len(self.X[0])))
         
         df = pd.DataFrame(columns=['X', 'Y'])
-        df['X'] = tsne_results[:, 0]
-        df['Y'] = tsne_results[:, 1]
+        df['X'] = self.tsne_results[:, 0]
+        df['Y'] = self.tsne_results[:, 1]
 
-        values = df.values
+        tsne_values = df.values
         
         from hdbscan import HDBSCAN
         clustering = HDBSCAN(min_cluster_size=min_cluster_size)
-        y_pred = clustering.fit_predict(values)
+        self.y_pred = clustering.fit_predict(tsne_values)
         
         next_cluster_num = get_next_cluster_num()
         
         self.y = []
         filtered_values = []
-        for i in range(0, len(y_pred)):
-            if y_pred[i] < 0:
+        for i in range(0, len(self.y_pred)):
+            if self.y_pred[i] < 0:
                 continue
-            filtered_values.append(values[i])
-            self.y.append(int(y_pred[i]) + int(next_cluster_num))
+            filtered_values.append(tsne_values[i])
+            self.y.append(int(self.y_pred[i]) + int(next_cluster_num))
+        
+        self.y = np.array(self.y, dtype='int')
         
         print('Next cluster num: ' + str(next_cluster_num))
         
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
         
         self.n_clusters = len(clusters_codes)
+        
+        filtered_values = np.array(filtered_values)
         
         self.index_array = np.concatenate((filtered_values, np.zeros((len(filtered_values), 1), dtype='float')), axis=1)
         
@@ -436,7 +444,7 @@ class Clustering:
             density_list.append(self.index_array[i, 2])
         return np.array(density_list, dtype='float64').mean()
     
-    def visualize(self, save_image_to_file=False, show_som_map=False):
+    def visualize(self, save_image_to_file=False, show_som_map=False, show_tsne_res=False):
         if show_som_map:
             import pylab as pyb
             pyb.figure(figsize=(7, 5))
@@ -450,6 +458,18 @@ class Clustering:
                 if not self.overwrite:
                     fname = free_file_name(os.path.abspath('target/som'), 'png')
                 pyb.savefig(fname)
+        if show_tsne_res:
+            plt.scatter(self.tsne_results[:, 0],
+                        self.tsne_results[:, 1],
+                        s=25,
+                        c='black',
+                        edgecolors='none',
+                        label='Clusters ')
+            plt.title('Clusters')
+            plt.xlabel('X')
+            plt.ylabel('Y')
+            plt.show()
+
         
         import seaborn as sns
         plt.figure(figsize=(7, 3))
