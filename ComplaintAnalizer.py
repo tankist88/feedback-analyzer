@@ -454,11 +454,12 @@ class Clustering:
             if save_image_to_file:
                 if not os.path.isdir(os.path.abspath('target')):
                     os.mkdir(os.path.abspath('target'))
-                fname = os.path.abspath('target/som.png')
+                fname = os.path.abspath('target/map.png')
                 if not self.overwrite:
-                    fname = free_file_name(os.path.abspath('target/som'), 'png')
+                    fname = free_file_name(os.path.abspath('target/map'), 'png')
                 pyb.savefig(fname)
         if show_tsne_res:
+            plt.figure(figsize=(20, 18))
             plt.scatter(self.tsne_results[:, 0],
                         self.tsne_results[:, 1],
                         s=25,
@@ -468,11 +469,18 @@ class Clustering:
             plt.title('Clusters')
             plt.xlabel('X')
             plt.ylabel('Y')
+            if save_image_to_file:
+                if not os.path.isdir(os.path.abspath('target')):
+                    os.mkdir(os.path.abspath('target'))
+                fname = os.path.abspath('target/map.png')
+                if not self.overwrite:
+                    fname = free_file_name(os.path.abspath('target/map'), 'png')
+                plt.savefig(fname)
             plt.show()
 
         
         import seaborn as sns
-        plt.figure(figsize=(7, 3))
+        plt.figure(figsize=(14, 3))
         ax = sns.countplot(self.y)
         ax.set_title("Clusters sizes")
         for p in ax.patches:
@@ -615,7 +623,7 @@ class Clustering:
     def get_stop_words_set(self):
         return self.stop_words_set
     
-    def report(self, path):
+    def report(self, path, show_som_map=False, show_tsne_res=False):
         clusters_orig, clusters_list = self.get_clusters_rows()
         self.wordclouds(clusters_list=clusters_list, save_image_to_file=True, save_image_to_db=True)
         
@@ -641,7 +649,7 @@ class Clustering:
         template_vars = {
                 "date": datetime.datetime.now().strftime("%d.%m.%Y"),
                 "logo_img": os.path.abspath('target/logo.png').replace("\\", "/"),
-                "som_img": os.path.abspath('target/som.png').replace("\\", "/"),
+                "map_img": os.path.abspath('target/map.png').replace("\\", "/"),
                 "count_img": os.path.abspath('target/count.png').replace("\\", "/"),
                 "clusters_img": os.path.abspath('target/clusters.png').replace("\\", "/"),
                 "clusters": clusters_doc
@@ -709,7 +717,7 @@ class Classification:
         
         # Applying LDA
         from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
-        lda = LDA(n_components=50)
+        lda = LDA(n_components=100)
         x_train = lda.fit_transform(x_train, y_train)
         x_test = lda.transform(x_test)
         
@@ -732,11 +740,13 @@ class Classification:
         # Importing the Keras libraries and packages
         from keras.models import Sequential
         from keras.layers import Dense
+        from keras.layers import Dropout
         
         classifier = Sequential()
         classifier.add(Dense(output_dim=len(x_train[0]), init='uniform', activation=act_func, input_dim=len(x_train[0])))
         for i in range(0, hidden_layers):
             classifier.add(Dense(output_dim=len(x_train[0]), init='uniform', activation=act_func))
+            classifier.add(Dropout(0.2))
         classifier.add(Dense(output_dim=len(categories), init='uniform', activation='sigmoid'))
         classifier.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
         

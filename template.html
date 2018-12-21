@@ -119,24 +119,23 @@
   <body>
     <div class = "title">
       <H1>Кластеры обращений</H1>
-      <H2>Период обработанных обращений: {{period}}</H2>
       <H3>Отчет сформирован {{date}}</H3>
     </div>
     <div style="page-break-before: always">
-      <H2 style="color: #24943A">Карта данных</H2>
-      <img style="width: 350px" src="file:///{{som_img}}">
-      <H2 style="color: #24943A">Количество и размер кластеров</H2>
+      <H3 style="color: #24943A">Карта данных</H3>
+      <img style="width: 300px" src="file:///{{map_img}}">
+      <H3 style="color: #24943A">Количество и размер кластеров</H3>
       <img style="width: 400px" src="file:///{{count_img}}">
-      <H2 style="color: #24943A">Маркированные кластеры</H2>
+      <H3 style="color: #24943A">Маркированные кластеры</H3>
       <img style="width: 300px" src="file:///{{clusters_img}}">
     </div>
     <div>
       {% for cluster in clusters %}
         <p style="page-break-before: always" ></p>
-        <h2 style="color: #24943A">Кластер № {{cluster.0}}. Обращений: {{cluster.3}}</h2>
-        <h3>ВНИМАНИЕ! Кластеризации подлежат только обращения, содержащие текст и длиной более {{cluster.4}} символов.</h3>
+        <h3 style="color: #24943A">Кластер № {{cluster.0}}. Обращений: {{cluster.3}}</h3>
+        <div style="font-size: 12px;">ВНИМАНИЕ! Кластеризации подлежат только обращения, содержащие текст и длиной более {{cluster.4}} символов.</div>
         <center><img style="width: 550px" src="file:///{{cluster.1}}"></center>
-        <h3>Типичные сообщения кластера:</h3>
+        <div style="font-size: 14px;">Типичные сообщения кластера:</div>
         {{cluster.2}}
       {% endfor %}
     </div>
