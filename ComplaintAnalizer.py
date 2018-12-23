@@ -371,7 +371,7 @@ class Clustering:
             from sklearn.decomposition import PCA
             pca = PCA(n_components=n_components)
             x_pca = pca.fit_transform(self.X)
-            print('Cumulative explained variation for principal components: {}'.format(np.sum(self.pca.explained_variance_ratio_)))
+            print('Cumulative explained variation for principal components: {}'.format(np.sum(pca.explained_variance_ratio_)))
             
             from sklearn.manifold import TSNE
             tsne = TSNE(n_components=2, 
@@ -680,10 +680,21 @@ class Classification:
     def stopwords_from_file(self, filepath):
         file = open(os.path.abspath(filepath), "r")
         self.set_additional_stopwords(file.readlines())
-        
-    def get_confusion_matrix(self):
-        return self.cm
-    
+
+    def build_classifier(self, hidden_layers, act_func, input_size, output_size):
+        from keras.models import Sequential
+        from keras.layers import Dense
+        from keras.layers import Dropout
+
+        classifier = Sequential()
+        classifier.add(Dense(output_dim=input_size, init='uniform', activation=act_func, input_dim=input_size))
+        for i in range(0, hidden_layers):
+            classifier.add(Dense(output_dim=input_size, init='uniform', activation=act_func))
+            classifier.add(Dropout(0.2))
+        classifier.add(Dense(output_dim=output_size, init='uniform', activation='sigmoid'))
+        classifier.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        return classifier
+
     def fit(self, 
             dataset, 
             msg_column=1,
@@ -719,7 +730,6 @@ class Classification:
         from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
         lda = LDA(n_components=100)
         x_train = lda.fit_transform(x_train, y_train)
-        x_test = lda.transform(x_test)
         
         print('Complete Applying LDA. Found components: ' + str(len(x_train[0])))
         
@@ -736,52 +746,41 @@ class Classification:
         y_nn_train = np.array(y_nn_train, dtype='int').reshape(len(y_train), len(categories))
         
         print('Complete create Y matrix')
-        
-        # Importing the Keras libraries and packages
-        from keras.models import Sequential
-        from keras.layers import Dense
-        from keras.layers import Dropout
-        
-        classifier = Sequential()
-        classifier.add(Dense(output_dim=len(x_train[0]), init='uniform', activation=act_func, input_dim=len(x_train[0])))
-        for i in range(0, hidden_layers):
-            classifier.add(Dense(output_dim=len(x_train[0]), init='uniform', activation=act_func))
-            classifier.add(Dropout(0.2))
-        classifier.add(Dense(output_dim=len(categories), init='uniform', activation='sigmoid'))
-        classifier.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        
+        classifier = self.build_classifier(hidden_layers, act_func, len(x_train[0]), len(categories))
         print('Complete create arch of NN and compile')
-        
-        # Fitting the ANN to the Training set
         classifier.fit(x_train, y_nn_train, batch_size=batch_size, nb_epoch=nb_epoch)
-        
         print('Complete fitting NN')
-        
+
         with open('complaint_classifier.pkl', 'wb') as fout:
             pickle.dump((categories, cv, lda, classifier), fout)
+
+        print('Dump classifier successfully')
+
+        from keras.wrappers.scikit_learn import KerasClassifier
+        from sklearn.model_selection import cross_val_predict
+        from sklearn.model_selection import cross_val_score
+
+        cv_classifier = KerasClassifier(build_fn=self.build_classifier,
+                                        batch_size=batch_size,
+                                        epochs=nb_epoch,
+                                        hidden_layers=hidden_layers,
+                                        act_func=act_func,
+                                        input_size=len(x_train[0]),
+                                        output_size=len(categories))
         
-        # Predicting the Test set results
-        y_pred_nn = classifier.predict(x_test)
-        
-        out = []
-        for i in range(0, len(y_pred_nn)):
-            max_index = 0
-            max_num = 0
-            for j in range(0, len(categories)):
-                if y_pred_nn[i, j] > max_num:
-                    max_num = y_pred_nn[i, j]
-                    max_index = j
-            out.append(categories[max_index])
-        
-        y_pred = np.array(out, dtype='int')
-        
-        # Making the Confusion Matrix
-        from sklearn.metrics import confusion_matrix
-        self.cm = confusion_matrix(y_test, y_pred)
-        
-        print('Confusion Matrix')
-        print(self.cm)
-    
+        predicted = cross_val_predict(estimator=cv_classifier, X=x_train, y=y_train, cv=10)
+
+        fig, ax = plt.subplots()
+        ax.scatter(y_train, predicted, edgecolors=(0, 0, 0))
+        ax.set_xlabel('Measured')
+        ax.set_ylabel('Predicted')
+        plt.show()
+
+        accuracies = cross_val_score(estimator=cv_classifier, X=x_train, y=y_train, cv=10)
+
+        print('mean accuracy: ' + str(accuracies.mean()))
+        print('variance: ' + str(accuracies.std()))
+
     def predict_raw(self, messages):
         corpus, orig = text_preprocessing(messages, 0, 0, self.stop_words_set)
         
