@@ -682,17 +682,29 @@ class Classification:
         self.set_additional_stopwords(file.readlines())
 
     def build_classifier(self, hidden_layers, act_func, input_size, output_size):
+        print('==> build_classifier(' + str(hidden_layers) + ', ' + str(act_func) + ', ' + str(input_size) + ', ' + str(output_size) + ')')
+        
         from keras.models import Sequential
         from keras.layers import Dense
         from keras.layers import Dropout
 
+        if input_size - output_size > 10:
+            layer_size = input_size * 3
+        else:
+            layer_size = output_size * 7
+        
+        print('Hidden layer size: ' + str(layer_size))
+        
         classifier = Sequential()
-        classifier.add(Dense(output_dim=input_size, init='uniform', activation=act_func, input_dim=input_size))
+        classifier.add(Dense(output_dim=layer_size, init='uniform', activation=act_func, input_dim=input_size))
         for i in range(0, hidden_layers):
-            classifier.add(Dense(output_dim=input_size, init='uniform', activation=act_func))
+            classifier.add(Dense(output_dim=layer_size, init='uniform', activation=act_func))
             classifier.add(Dropout(0.2))
         classifier.add(Dense(output_dim=output_size, init='uniform', activation='sigmoid'))
         classifier.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        
+        print('<== build_classifier()')
+        
         return classifier
 
     def fit(self, 
@@ -703,7 +715,8 @@ class Classification:
             batch_size=10,
             nb_epoch=100,
             hidden_layers=2,
-            act_func='relu'):
+            act_func='relu', 
+            save_image_to_file=False):
         
         corpus, orig = text_preprocessing(dataset,
                                           msg_column,
@@ -774,12 +787,19 @@ class Classification:
         ax.scatter(y_train, predicted, edgecolors=(0, 0, 0))
         ax.set_xlabel('Measured')
         ax.set_ylabel('Predicted')
+        if save_image_to_file:
+            if not os.path.isdir(os.path.abspath('target')):
+                os.mkdir(os.path.abspath('target'))
+            fname = os.path.abspath('target/cross_val_predict.png')
+            plt.savefig(fname)
         plt.show()
 
         accuracies = cross_val_score(estimator=cv_classifier, X=x_train, y=y_train, cv=10)
 
         print('mean accuracy: ' + str(accuracies.mean()))
         print('variance: ' + str(accuracies.std()))
+        
+        return accuracies
 
     def predict_raw(self, messages):
         corpus, orig = text_preprocessing(messages, 0, 0, self.stop_words_set)
@@ -874,7 +894,7 @@ class Classification:
             font_title = {'fontname': 'Arial', 'fontsize': '20'}
             plt.figure(figsize=(10, 3))
             plt.bar(num_dates, sizes, width=1.0)
-            plt.title(u'Кластер ' + str(unique_classes[i]), **font_title)
+            plt.title(u'Класс ' + str(unique_classes[i]), **font_title)
             plt.xlabel(u'Дата', **font_label)
             plt.ylabel(u'Размер класса жалоб', **font_label)
             plt.xticks(num_dates, dates, rotation=45)
