@@ -1,12 +1,39 @@
-import numpy as np
 import datetime
-import pandas as pd
-import matplotlib
-import matplotlib.pyplot as plt
-import re
 import os
 import pickle
+import re
 import sqlite3
+
+import matplotlib.pyplot as plt
+import nltk
+import numpy as np
+import pandas as pd
+import pylab as pyb
+import seaborn as sns
+from hdbscan import HDBSCAN
+from jinja2 import Environment, FileSystemLoader
+from keras.layers import Dense
+from keras.layers import Dropout
+from keras.models import Sequential
+from keras.wrappers.scikit_learn import KerasClassifier
+from matplotlib import cm
+from minisom import MiniSom
+from nltk.corpus import stopwords
+from nltk.stem.snowball import SnowballStemmer
+from pandas import isnull
+from pymorphy2 import MorphAnalyzer
+from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.manifold import TSNE
+from sklearn.model_selection import cross_val_predict
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from weasyprint import HTML
+from wordcloud import WordCloud
+
+nltk.download('stopwords')
 
 
 def get_prepared_word_array(text):
@@ -17,9 +44,6 @@ def get_prepared_word_array(text):
 
 
 def text_preprocessing(dataset, msg_column, min_msg_length, stop_words_set):
-    from nltk.stem.snowball import SnowballStemmer
-    from pandas import isnull
-    
     corpus = []
     orig = []
     for i in range(0, len(dataset)):
@@ -30,7 +54,7 @@ def text_preprocessing(dataset, msg_column, min_msg_length, stop_words_set):
         ss = SnowballStemmer('russian')
         filtered_review = []
         for word in review:
-            if not word in stop_words_set:
+            if word not in stop_words_set:
                 filtered_review.append(ss.stem(word))
         review = ' '.join(np.array(filtered_review))
         corpus.append(review)
@@ -204,11 +228,6 @@ class Clustering:
         self.period_start = period_start
         self.period_end = period_end
         self.overwrite = overwrite
-        
-        import nltk
-        nltk.download('stopwords')
-        from nltk.corpus import stopwords
-        
         self.stop_words_set = set(stopwords.words('russian'))
 
     def get_original_x_rows_for_cluster(self, cluster_num, limit=-1):
@@ -268,15 +287,10 @@ class Clustering:
         print("Using SOM model file: " + str(fname))
         
         if not os.path.isfile(fname):
-            from sklearn.feature_extraction.text import CountVectorizer
             cv = CountVectorizer(max_features=self.max_features)
             self.X = cv.fit_transform(self.corpus).toarray()
-            
-            from sklearn.preprocessing import MinMaxScaler
             self.sc = MinMaxScaler(feature_range=(0, 1))
             self.X_scale = self.sc.fit_transform(self.X)
-            
-            from minisom import MiniSom
             self.som = MiniSom(x=som_size,
                                y=som_size,
                                input_len=self.max_features,
@@ -307,8 +321,7 @@ class Clustering:
         
         coord_array = np.array(indexes_coords).reshape(int(len(indexes_coords)/2), 2)
         dist_array = np.array(indexes_dist).reshape(int(len(indexes_dist)), 1)
-        
-        from hdbscan import HDBSCAN
+
         clustering = HDBSCAN(min_cluster_size=5)
         y_pred = clustering.fit_predict(coord_array)
         
@@ -364,16 +377,13 @@ class Clustering:
         print("Using t-SNE model file: " + str(fname))
         
         if not os.path.isfile(fname):
-            from sklearn.feature_extraction.text import CountVectorizer
             cv = CountVectorizer(max_features=self.max_features)
             self.X = cv.fit_transform(self.corpus).toarray()
-            
-            from sklearn.decomposition import PCA
+
             pca = PCA(n_components=n_components)
             x_pca = pca.fit_transform(self.X)
             print('Cumulative explained variation for principal components: {}'.format(np.sum(pca.explained_variance_ratio_)))
-            
-            from sklearn.manifold import TSNE
+
             tsne = TSNE(n_components=2, 
                         verbose=1, 
                         perplexity=perplexity, 
@@ -396,8 +406,7 @@ class Clustering:
         df['Y'] = self.tsne_results[:, 1]
 
         tsne_values = df.values
-        
-        from hdbscan import HDBSCAN
+
         clustering = HDBSCAN(min_cluster_size=min_cluster_size)
         self.y_pred = clustering.fit_predict(tsne_values)
         
@@ -446,7 +455,6 @@ class Clustering:
     
     def visualize(self, save_image_to_file=False, show_som_map=False, show_tsne_res=False):
         if show_som_map:
-            import pylab as pyb
             pyb.figure(figsize=(7, 5))
             pyb.bone()
             pyb.pcolor(self.som.distance_map().T)
@@ -478,8 +486,6 @@ class Clustering:
                 plt.savefig(fname)
             plt.show()
 
-        
-        import seaborn as sns
         plt.figure(figsize=(14, 3))
         ax = sns.countplot(self.y)
         ax.set_title("Clusters sizes")
@@ -498,7 +504,9 @@ class Clustering:
         plt.figure(figsize=(7, 6))
         
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
-        
+
+        cl_colors = np.random.choice(len(cm.get_cmap().colors), self.n_clusters)
+
         for i in range(0, self.n_clusters):
             cl_code = clusters_codes[i]
             if cl_code < 0:
@@ -506,7 +514,7 @@ class Clustering:
             plt.scatter(self.index_array[self.y == cl_code, 0], 
                         self.index_array[self.y == cl_code, 1], 
                         s=25,
-                        c=matplotlib.cm.spectral(float(i) / self.n_clusters),
+                        c=cm.get_cmap().colors[cl_colors[i]],
                         edgecolors='none', 
                         label='Cluster ' + str(cl_code))
         plt.title('Clusters')
@@ -540,7 +548,6 @@ class Clustering:
         return np.array(clusters_orig).reshape(int(len(clusters_orig)/2), 2)
         
     def get_clusters_rows(self, limit=-1):
-        from pymorphy2 import MorphAnalyzer
         morph = MorphAnalyzer()
         
         clusters_orig = []
@@ -586,8 +593,6 @@ class Clustering:
         self.wordclouds(clusters_list=clusters_list, save_image_to_file=save_image_to_file)
     
     def wordclouds(self, clusters_list, save_image_to_file=False, save_image_to_db=False):
-        from wordcloud import WordCloud
-        
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
         
         for i in range(0, len(clusters_list)):
@@ -642,8 +647,7 @@ class Clustering:
                             header=False, classes=['greenTable']),
                     len(clusters_orig[i]),
                     self.min_msg_length])
-        
-        from jinja2 import Environment, FileSystemLoader
+
         env = Environment(loader=FileSystemLoader('.'))
         template = env.get_template("template.html")
         template_vars = {
@@ -655,19 +659,13 @@ class Clustering:
                 "clusters": clusters_doc
                 }
         html_out = template.render(template_vars)
-        
-        from weasyprint import HTML
+
         HTML(string=html_out).write_pdf(os.path.abspath(path))
 
 
 class Classification:
     def __init__(self, max_features=250):
         self.max_features = max_features
-        
-        import nltk
-        nltk.download('stopwords')
-        from nltk.corpus import stopwords
-        
         self.stop_words_set = set(stopwords.words('russian'))
     
     def set_additional_stopwords(self, add_stop_words):
@@ -683,10 +681,6 @@ class Classification:
 
     def build_classifier(self, hidden_layers, act_func, input_size, output_size):
         print('==> build_classifier(' + str(hidden_layers) + ', ' + str(act_func) + ', ' + str(input_size) + ', ' + str(output_size) + ')')
-        
-        from keras.models import Sequential
-        from keras.layers import Dense
-        from keras.layers import Dropout
 
         if input_size - output_size > 10:
             layer_size = input_size * 3
@@ -724,8 +718,7 @@ class Classification:
                                           self.stop_words_set)
         
         print('Complete text pre processing')
-        
-        from sklearn.feature_extraction.text import CountVectorizer
+
         cv = CountVectorizer(max_features=self.max_features)
         x = cv.fit_transform(corpus).toarray()
         y = [row[class_column] for row in dataset]
@@ -734,13 +727,11 @@ class Classification:
         print('Complete determine X and y')
 
         # Splitting the dataset into the Training set and Test set
-        from sklearn.cross_validation import train_test_split
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, random_state=0)
         
         print('Complete splitting into the Training set and Test set')
         
         # Applying LDA
-        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
         lda = LDA(n_components=100)
         x_train = lda.fit_transform(x_train, y_train)
         
@@ -761,17 +752,13 @@ class Classification:
         print('Complete create Y matrix')
         classifier = self.build_classifier(hidden_layers, act_func, len(x_train[0]), len(categories))
         print('Complete create arch of NN and compile')
-        classifier.fit(x_train, y_nn_train, batch_size=batch_size, nb_epoch=nb_epoch)
+        classifier.fit(x_train, y_nn_train, batch_size=batch_size, epochs=nb_epoch, verbose=2)
         print('Complete fitting NN')
 
         with open('complaint_classifier.pkl', 'wb') as fout:
             pickle.dump((categories, cv, lda, classifier), fout)
 
         print('Dump classifier successfully')
-
-        from keras.wrappers.scikit_learn import KerasClassifier
-        from sklearn.model_selection import cross_val_predict
-        from sklearn.model_selection import cross_val_score
 
         cv_classifier = KerasClassifier(build_fn=self.build_classifier,
                                         batch_size=batch_size,
@@ -925,8 +912,7 @@ class Classification:
                             os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png'),
                             pd.DataFrame(messages).to_html(header=False, classes=['greenTable'])
                             ])
-        
-        from jinja2 import Environment, FileSystemLoader
+
         env = Environment(loader=FileSystemLoader('.'))
         template = env.get_template("dynamics.html")
         template_vars = {
@@ -935,6 +921,5 @@ class Classification:
                 "classes": classes
                 }
         html_out = template.render(template_vars)
-        
-        from weasyprint import HTML
+
         HTML(string=html_out).write_pdf(os.path.abspath(path))
