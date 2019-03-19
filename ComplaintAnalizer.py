@@ -12,10 +12,10 @@ import pylab as pyb
 import seaborn as sns
 from hdbscan import HDBSCAN
 from jinja2 import Environment, FileSystemLoader
+from keras.callbacks import EarlyStopping
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.models import Sequential
-from keras.wrappers.scikit_learn import KerasClassifier
 from matplotlib import cm
 from minisom import MiniSom
 from nltk.corpus import stopwords
@@ -26,8 +26,6 @@ from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.manifold import TSNE
-from sklearn.model_selection import cross_val_predict
-from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from weasyprint import HTML
@@ -63,7 +61,7 @@ def text_preprocessing(dataset, msg_column, min_msg_length, stop_words_set):
 
 
 def db_init():
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS COMPLAINT_CLASSES 
@@ -97,7 +95,7 @@ def db_init():
 
 def clear_classes():
     db_init()
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("DELETE FROM COMPLAINT_CLASSES")
     cursor.execute("DELETE FROM COMPLAINT_MESSAGES")
@@ -108,7 +106,7 @@ def clear_classes():
 
 def clear_clusters():
     db_init()
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("DELETE FROM CLASSES_LOGO")
     conn.commit()
@@ -128,7 +126,7 @@ def free_file_name(filename, ext):
 def get_next_cluster_num():
     db_init()
 
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("SELECT CL_NUM FROM CLASSES_LOGO ORDER BY CL_NUM DESC")
     result = cursor.fetchone()
@@ -149,7 +147,7 @@ def insert_cluster_logo(num):
     with open(filepath, 'rb') as f:
         ablob = f.read()
 
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
 
     try:
         cursor = conn.cursor()
@@ -162,7 +160,7 @@ def insert_cluster_logo(num):
 
 
 def insert_class_row(num, size, date):
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("INSERT INTO COMPLAINT_CLASSES VALUES(null, ?, ?, ?)", (num, size, date))
     conn.commit()
@@ -173,7 +171,7 @@ def insert_class_row(num, size, date):
 
 
 def insert_msg_row(cl_id, num, msg):
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("INSERT INTO COMPLAINT_MESSAGES VALUES(null, ?, ?, ?)", (cl_id, num, msg))
     conn.commit()
@@ -181,7 +179,7 @@ def insert_msg_row(cl_id, num, msg):
 
 
 def get_all_classes():
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM COMPLAINT_CLASSES ORDER BY date(CL_DATE) ASC")
     results = cursor.fetchall()
@@ -190,7 +188,7 @@ def get_all_classes():
 
 
 def get_messages_by_class_id(cl_id):
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("SELECT CL_MSG FROM COMPLAINT_MESSAGES WHERE CL_ID=?", (cl_id,))
     results = cursor.fetchall()
@@ -199,7 +197,7 @@ def get_messages_by_class_id(cl_id):
 
 
 def extract_all_logos():
-    conn = sqlite3.connect('complaint_stat.db')
+    conn = sqlite3.connect('resources/complaint_stat.db')
     cursor = conn.cursor()
     cursor.execute("SELECT CL_NUM, CL_LOGO FROM CLASSES_LOGO")
     results = cursor.fetchall()
@@ -277,7 +275,12 @@ class Clustering:
         
         print("corpus length: " + str(len(self.corpus)))
             
-        fname = 'som_' + str(self.max_features) + '_' + str(som_size) + '_' + str(som_sigma).replace(".", "_") + '_' + str(som_learning_rate).replace(".", "_")
+        fname = \
+            'resources/som_' + \
+            str(self.max_features) + '_' + \
+            str(som_size) + '_' + \
+            str(som_sigma).replace(".", "_") + '_' + \
+            str(som_learning_rate).replace(".", "_")
         
         if not self.overwrite:
             fname = free_file_name(fname, 'pkl')
@@ -367,7 +370,13 @@ class Clustering:
         
         print("corpus length: " + str(len(self.corpus)))
             
-        fname = 'tsne_' + str(self.max_features) + '_' + str(n_iter) + '_' +  str(n_components) + '_' + str(perplexity).replace(".", "_") + '_' + str(learning_rate).replace(".", "_")
+        fname = \
+            'resources/tsne_' + \
+            str(self.max_features) + '_' + \
+            str(n_iter) + '_' +  \
+            str(n_components) + '_' + \
+            str(perplexity).replace(".", "_") + '_' + \
+            str(learning_rate).replace(".", "_")
         
         if not self.overwrite:
             fname = free_file_name(fname, 'pkl')
@@ -528,7 +537,22 @@ class Clustering:
                 fname = free_file_name(os.path.abspath('target/clusters'), 'png')
             plt.savefig(fname)
         plt.show()
-    
+
+    def clusters_tsne(self):
+        clusters_orig = []
+
+        clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
+
+        for n in range(0, self.n_clusters):
+            cl_code = clusters_codes[n]
+            if cl_code < 0:
+                continue
+            for i in range(0, len(self.y_pred)):
+                if self.y_pred[i] == cl_code:
+                    clusters_orig.append(cl_code)
+                    clusters_orig.append(self.orig[i])
+        return np.array(clusters_orig).reshape(int(len(clusters_orig) / 2), 2)
+
     def clusters(self):
         clusters_orig = []
         
@@ -546,7 +570,48 @@ class Clustering:
                         clusters_orig.append(self.orig[j])
                         break
         return np.array(clusters_orig).reshape(int(len(clusters_orig)/2), 2)
-        
+
+    def get_clusters_rows_tsne(self):
+        from pymorphy2 import MorphAnalyzer
+        morph = MorphAnalyzer()
+
+        clusters_orig = []
+        clusters_list = []
+
+        clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
+
+        clusters = self.clusters_tsne()
+
+        for n in range(0, self.n_clusters):
+            cl_code = clusters_codes[n]
+            if cl_code < 0:
+                continue
+            values = set()
+            orig_values = set()
+            for j in range(0, len(clusters)):
+                if int(clusters[j][0]) == int(cl_code):
+                    orig_values.add(clusters[j][1])
+                    review = get_prepared_word_array(clusters[j][1])
+                    filtered_review = []
+                    for word in review:
+                        if not word in self.stop_words_set:
+                            parse_result = morph.parse(word)
+                            if len(parse_result) == 1:
+                                filtered_review.append(morph.parse(word)[0].normal_form)
+                            elif len(parse_result) > 0:
+                                normal_form = morph.parse(word)[0].normal_form
+                                for k in range(0, len(parse_result)):
+                                    if parse_result[k].tag.POS == 'NOUN':
+                                        normal_form = morph.parse(word)[k].normal_form
+                                        break
+                                filtered_review.append(normal_form)
+                            else:
+                                filtered_review.append(word)
+                    values.add(" ".join(np.array(filtered_review)))
+            clusters_orig.append(orig_values)
+            clusters_list.append(" ".join(list(values)))
+        return clusters_orig, clusters_list
+
     def get_clusters_rows(self, limit=-1):
         morph = MorphAnalyzer()
         
@@ -587,7 +652,11 @@ class Clustering:
             clusters_orig.append(orig_values)
             clusters_list.append(" ".join(list(values)))
         return clusters_orig, clusters_list
-    
+
+    def show_wordcloud_tsne(self, save_image_to_file=False):
+        clusters_orig, clusters_list = self.get_clusters_rows_tsne()
+        self.wordclouds(clusters_list=clusters_list, save_image_to_file=save_image_to_file)
+
     def show_wordcloud(self, save_image_to_file=False):
         clusters_orig, clusters_list = self.get_clusters_rows()
         self.wordclouds(clusters_list=clusters_list, save_image_to_file=save_image_to_file)
@@ -628,8 +697,12 @@ class Clustering:
     def get_stop_words_set(self):
         return self.stop_words_set
     
-    def report(self, path, show_som_map=False, show_tsne_res=False):
-        clusters_orig, clusters_list = self.get_clusters_rows()
+    def report(self, path, show_tsne_res=False):
+        if show_tsne_res:
+            clusters_orig, clusters_list = self.get_clusters_rows_tsne()
+        else:
+            clusters_orig, clusters_list = self.get_clusters_rows()
+
         self.wordclouds(clusters_list=clusters_list, save_image_to_file=True, save_image_to_db=True)
         
         clusters_orig_low, clusters_list_low = self.get_clusters_rows(7)
@@ -648,7 +721,7 @@ class Clustering:
                     len(clusters_orig[i]),
                     self.min_msg_length])
 
-        env = Environment(loader=FileSystemLoader('.'))
+        env = Environment(loader=FileSystemLoader('resources'))
         template = env.get_template("template.html")
         template_vars = {
                 "date": datetime.datetime.now().strftime("%d.%m.%Y"),
@@ -726,14 +799,13 @@ class Classification:
 
         print('Complete determine X and y')
 
-        # Splitting the dataset into the Training set and Test set
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, random_state=0)
+        x_train, x_valid, y_train, y_valid = train_test_split(x, y, test_size=0.1, random_state=0)
         
         print('Complete splitting into the Training set and Test set')
-        
-        # Applying LDA
+
         lda = LDA(n_components=100)
         x_train = lda.fit_transform(x_train, y_train)
+        x_valid = lda.transform(x_valid)
         
         print('Complete Applying LDA. Found components: ' + str(len(x_train[0])))
         
@@ -748,60 +820,54 @@ class Classification:
                     y_nn_train.append(0)
         
         y_nn_train = np.array(y_nn_train, dtype='int').reshape(len(y_train), len(categories))
+
+        y_nn_valid = []
+        for i in range(0, len(y_valid)):
+            for j in range(0, len(categories)):
+                if categories[j] == y_valid[i]:
+                    y_nn_valid.append(1)
+                else:
+                    y_nn_valid.append(0)
+
+        y_nn_valid = np.array(y_nn_valid, dtype='int').reshape(len(y_valid), len(categories))
         
         print('Complete create Y matrix')
         classifier = self.build_classifier(hidden_layers, act_func, len(x_train[0]), len(categories))
         print('Complete create arch of NN and compile')
-        classifier.fit(x_train, y_nn_train, batch_size=batch_size, epochs=nb_epoch, verbose=2)
+        classifier.fit(
+            x_train,
+            y_nn_train,
+            callbacks=[
+                EarlyStopping(
+                    monitor='val_loss',
+                    mode='min',
+                    restore_best_weights=True,
+                    patience=5)
+            ],
+            batch_size=batch_size,
+            epochs=nb_epoch,
+            validation_data=(x_valid, y_nn_valid),
+            verbose=2,
+            shuffle=True)
         print('Complete fitting NN')
 
-        with open('complaint_classifier.pkl', 'wb') as fout:
-            pickle.dump((categories, cv, lda, classifier), fout)
+        with open('resources/complaint_classifier.pkl', 'wb') as file:
+            pickle.dump((categories, cv, lda, classifier), file)
 
         print('Dump classifier successfully')
-
-        cv_classifier = KerasClassifier(build_fn=self.build_classifier,
-                                        batch_size=batch_size,
-                                        epochs=nb_epoch,
-                                        hidden_layers=hidden_layers,
-                                        act_func=act_func,
-                                        input_size=len(x_train[0]),
-                                        output_size=len(categories))
-        
-        predicted = cross_val_predict(estimator=cv_classifier, X=x_train, y=y_train, cv=10)
-
-        fig, ax = plt.subplots()
-        ax.scatter(y_train, predicted, edgecolors=(0, 0, 0))
-        ax.set_xlabel('Measured')
-        ax.set_ylabel('Predicted')
-        if save_image_to_file:
-            if not os.path.isdir(os.path.abspath('target')):
-                os.mkdir(os.path.abspath('target'))
-            fname = os.path.abspath('target/cross_val_predict.png')
-            plt.savefig(fname)
-        plt.show()
-
-        accuracies = cross_val_score(estimator=cv_classifier, X=x_train, y=y_train, cv=10)
-
-        print('mean accuracy: ' + str(accuracies.mean()))
-        print('variance: ' + str(accuracies.std()))
-        
-        return accuracies
 
     def predict_raw(self, messages):
         corpus, orig = text_preprocessing(messages, 0, 0, self.stop_words_set)
         
-        with open('complaint_classifier.pkl', 'rb') as fin:
+        with open('resources/complaint_classifier.pkl', 'rb') as fin:
             categories, cv, lda, classifier = pickle.load(fin)
         
         x = cv.transform(corpus).toarray()
         x_test = lda.transform(x)
-        
-        # Predicting the Test set results
+
         return categories, classifier.predict(x_test)
     
     def predict(self, messages, threshold=0.5):
-        # Predicting the Test set results
         categories, y_pred_nn = self.predict_raw(messages)
         
         print('Using threshold: ' + str(threshold))
@@ -913,7 +979,7 @@ class Classification:
                             pd.DataFrame(messages).to_html(header=False, classes=['greenTable'])
                             ])
 
-        env = Environment(loader=FileSystemLoader('.'))
+        env = Environment(loader=FileSystemLoader('resources'))
         template = env.get_template("dynamics.html")
         template_vars = {
                 "date": datetime.datetime.now().strftime("%d.%m.%Y"),
