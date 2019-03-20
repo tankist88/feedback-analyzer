@@ -226,6 +226,7 @@ class Clustering:
         self.period_start = period_start
         self.period_end = period_end
         self.overwrite = overwrite
+        self.is_som_mappings_set = False
         self.stop_words_set = set(stopwords.words('russian'))
 
     def get_original_x_rows_for_cluster(self, cluster_num, limit=-1):
@@ -243,8 +244,7 @@ class Clustering:
         else:
             cluster_length = len(cluster)
             
-        try:
-            self.mappings
+        if self.is_som_mappings_set:
             for i in range(0, cluster_length):
                 if limit > 0:
                     print('cluster[' + str(i) + ']: ' + str(cluster[i][2]))
@@ -253,7 +253,7 @@ class Clustering:
                     cluster_lines.append(array_of_arrays[j])
             if len(cluster_lines) > 0:
                 cluster_lines = self.sc.inverse_transform(np.array(cluster_lines))
-        except AttributeError:
+        else:
             for i in range(0, len(self.y_pred)):
                 if self.y_pred[i] == cluster_num:
                     cluster_lines.append(self.X[i])
@@ -449,6 +449,7 @@ class Clustering:
         
     def som_mappings(self):
         self.mappings = self.som.win_map(self.X_scale)
+        self.is_som_mappings_set = True
     
     def get_clusters_number(self):
         return self.n_clusters
