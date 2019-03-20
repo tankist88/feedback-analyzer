@@ -572,7 +572,6 @@ class Clustering:
         return np.array(clusters_orig).reshape(int(len(clusters_orig)/2), 2)
 
     def get_clusters_rows_tsne(self):
-        from pymorphy2 import MorphAnalyzer
         morph = MorphAnalyzer()
 
         clusters_orig = []
@@ -919,19 +918,21 @@ class Classification:
                         count -= 1
 
             print('class: ' + str(class_num) + ' \t\tsize: ' + str(len(class_rows)) + '. \t\tInsert to db successful.')
-    
-    def classes_report(self, path):
+
+    def classes_report(self, path, msg_period=0):
         extract_all_logos()
         rows = get_all_classes()
 
         all_classes = np.array(([row[1] for row in rows]), dtype='int')
         all_ids = np.array(([row[0] for row in rows]), dtype='int')
-        
+
         unique_classes = pd.DataFrame(all_classes, columns=['class'])['class'].unique()
-        
+
+        unique_classes.sort()
+
         all_sizes = np.array(([row[2] for row in rows]), dtype='int')
         all_dates = np.array(([row[3] for row in rows]))
-        
+
         for i in range(0, len(unique_classes)):
             sizes = []
             dates = []
@@ -942,15 +943,19 @@ class Classification:
             num_dates = []
             for k in range(0, len(dates)):
                 num_dates.append(k)
-            
-            font_label = {'fontname': 'Arial', 'fontsize': '17'}
-            font_title = {'fontname': 'Arial', 'fontsize': '20'}
+
+            font_label = {'fontname': 'Arial', 'fontsize': '14'}
+            font_title = {'fontname': 'Arial', 'fontsize': '18'}
             plt.figure(figsize=(10, 3))
             plt.bar(num_dates, sizes, width=1.0)
             plt.title(u'Класс ' + str(unique_classes[i]), **font_title)
             plt.xlabel(u'Дата', **font_label)
             plt.ylabel(u'Размер класса жалоб', **font_label)
-            plt.xticks(num_dates, dates, rotation=45)
+            plt.xticks(
+                [num_dates[0], num_dates[int(len(num_dates) / 2)], num_dates[len(num_dates) - 1]],
+                [dates[0], dates[int(len(dates) / 2)], dates[len(dates) - 1]],
+                rotation=45
+            )
 
             if not os.path.isdir(os.path.abspath('target')):
                 os.mkdir(os.path.abspath('target'))
@@ -958,7 +963,7 @@ class Classification:
 
             plt.savefig(filename, bbox_inches='tight')
             plt.show()
-                
+
         classes = []
 
         pd.set_option('display.max_colwidth', -1)
@@ -967,25 +972,30 @@ class Classification:
         reversed_all_ids = all_ids[::-1]
         for i in range(0, len(unique_classes)):
             messages = list()
+            counter = 0
             for j in range(0, len(reversed_all_classes)):
                 if unique_classes[i] == reversed_all_classes[j]:
-                    messages = get_messages_by_class_id(int(reversed_all_ids[j]))
-                    break
+                    msg_part = get_messages_by_class_id(int(reversed_all_ids[j]))
+                    for msg in msg_part:
+                        messages.append(msg)
+                    if counter >= msg_period:
+                        break
+                    counter += 1
 
             classes.append([
-                            unique_classes[i],
-                            os.path.abspath('target/cl_' + str(unique_classes[i]) + '.png'),
-                            os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png'),
-                            pd.DataFrame(messages).to_html(header=False, classes=['greenTable'])
-                            ])
+                unique_classes[i],
+                os.path.abspath('target/cl_' + str(unique_classes[i]) + '.png'),
+                os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png'),
+                pd.DataFrame(messages).to_html(header=False, classes=['greenTable'])
+            ])
 
         env = Environment(loader=FileSystemLoader('resources'))
         template = env.get_template("dynamics.html")
         template_vars = {
-                "date": datetime.datetime.now().strftime("%d.%m.%Y"),
-                "logo_img": os.path.abspath('target/logo.png').replace("\\", "/"),
-                "classes": classes
-                }
+            "date": datetime.datetime.now().strftime("%d.%m.%Y"),
+            "logo_img": os.path.abspath('target/logo.png').replace("\\", "/"),
+            "classes": classes
+        }
         html_out = template.render(template_vars)
 
         HTML(string=html_out).write_pdf(os.path.abspath(path))

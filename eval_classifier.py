@@ -42,6 +42,6 @@ for file in os.listdir('datasets/classification'):
     date_str = file.split(sep='_')[1].split(sep='.')[0]
     fill_db(classifier, ds.values, date_str, 0.4)
 
-classifier.classes_report('reports/dynamics.pdf')
+classifier.classes_report('reports/dynamics.pdf', 3)
 
 print('Complete evaluate')
