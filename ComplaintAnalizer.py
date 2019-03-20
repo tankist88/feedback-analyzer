@@ -28,6 +28,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.manifold import TSNE
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import roc_curve
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 from weasyprint import HTML
@@ -822,7 +823,7 @@ class Classification:
         categories = pd.DataFrame(y)[0].unique()
 
         models = []
-        valid_scores = []
+        valid_acc_scores = []
         splits = list(StratifiedKFold(n_splits=10, shuffle=True, random_state=42).split(x, y))
         for idx, (train_idx, valid_idx) in enumerate(splits):
             print('+-------------------------+')
@@ -837,9 +838,7 @@ class Classification:
             y_nn_train = self.y_label_to_onehot(y_train, categories)
             y_nn_valid = self.y_label_to_onehot(y_valid, categories)
 
-            print('Complete create Y matrix')
             classifier = self.build_classifier(hidden_layers, act_func, len(x_train[0]), len(categories))
-            print('Complete create arch of NN and compile')
             classifier.fit(
                 x_train,
                 y_nn_train,
@@ -856,14 +855,32 @@ class Classification:
                 verbose=2,
                 shuffle=True)
 
-            print('Complete fitting NN')
-
             models.append(classifier)
 
-            y_valid_pred = self.onehot_to_y_label(classifier.predict(x_valid), categories, 0.5)
-            valid_scores.append(accuracy_score(y_valid, y_valid_pred))
+            y_nn_pred = classifier.predict(x_valid)
+            y_valid_pred = self.onehot_to_y_label(y_nn_pred, categories, 0.5)
+            valid_acc_scores.append(accuracy_score(y_valid, y_valid_pred))
 
-        acc_score = np.asarray(valid_scores, dtype='float64').mean()
+            plt.figure()
+            plt.plot([0, 1], [0, 1], 'k--')
+
+            for cl in range(len(categories)):
+                cl_valid = [row[cl] for row in y_nn_valid]
+                cl_pred = [row[cl] for row in y_nn_pred]
+                fpr, tpr, _ = roc_curve(cl_valid, cl_pred)
+                plt.plot(fpr, tpr)
+                plt.legend(loc=4)
+
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('Receiver operating characteristic. Fold ' + str(idx + 1))
+
+            if not os.path.isdir(os.path.abspath('target')):
+                os.mkdir(os.path.abspath('target'))
+            plt.savefig(os.path.abspath('target/auc_fold' + str(idx + 1) + '.png'))
+            plt.show()
+
+        acc_score = np.asarray(valid_acc_scores, dtype='float64').mean()
         print('Accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score, 6)))
 
         with open('resources/complaint_classifier.pkl', 'wb') as file:
