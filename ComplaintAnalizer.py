@@ -15,7 +15,8 @@ from jinja2 import Environment, FileSystemLoader
 from keras.callbacks import EarlyStopping
 from keras.layers import Dense
 from keras.layers import Dropout
-from keras.models import Sequential
+from keras.layers import Input
+from keras.models import Model
 from matplotlib import cm
 from minisom import MiniSom
 from nltk.corpus import stopwords
@@ -26,7 +27,8 @@ from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.manifold import TSNE
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 from weasyprint import HTML
 from wordcloud import WordCloud
@@ -753,7 +755,11 @@ class Classification:
         self.set_additional_stopwords(file.readlines())
 
     def build_classifier(self, hidden_layers, act_func, input_size, output_size):
-        print('==> build_classifier(' + str(hidden_layers) + ', ' + str(act_func) + ', ' + str(input_size) + ', ' + str(output_size) + ')')
+        print('==> build_classifier(' +
+              str(hidden_layers) + ', ' +
+              str(act_func) + ', ' +
+              str(input_size) + ', ' +
+              str(output_size) + ')')
 
         if input_size - output_size > 10:
             layer_size = input_size * 3
@@ -761,18 +767,27 @@ class Classification:
             layer_size = output_size * 7
         
         print('Hidden layer size: ' + str(layer_size))
-        
-        classifier = Sequential()
-        classifier.add(Dense(output_dim=layer_size, init='uniform', activation=act_func, input_dim=input_size))
-        for i in range(0, hidden_layers):
-            classifier.add(Dense(output_dim=layer_size, init='uniform', activation=act_func))
-            classifier.add(Dropout(0.2))
-        classifier.add(Dense(output_dim=output_size, init='uniform', activation='sigmoid'))
-        classifier.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+        inp = Input(shape=(input_size,))
+
+        if hidden_layers > 0:
+            nn = Dense(units=layer_size, kernel_initializer='he_normal', activation='relu')(inp)
+            nn = Dropout(0.2)(nn)
+
+            for i in range(1, hidden_layers):
+                nn = Dense(units=layer_size, kernel_initializer='he_normal', activation='relu')(nn)
+                nn = Dropout(0.2)(nn)
+
+            outp = Dense(units=output_size, kernel_initializer='glorot_normal', activation='sigmoid')(nn)
+        else:
+            outp = Dense(units=output_size, kernel_initializer='glorot_normal', activation='sigmoid')(inp)
+
+        model = Model(inputs=inp, outputs=outp)
+        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         
         print('<== build_classifier()')
         
-        return classifier
+        return model
 
     def fit(self, 
             dataset, 
@@ -799,95 +814,113 @@ class Classification:
 
         print('Complete determine X and y')
 
-        x_train, x_valid, y_train, y_valid = train_test_split(x, y, test_size=0.1, random_state=0)
-        
-        print('Complete splitting into the Training set and Test set')
-
         lda = LDA(n_components=100)
-        x_train = lda.fit_transform(x_train, y_train)
-        x_valid = lda.transform(x_valid)
-        
-        print('Complete Applying LDA. Found components: ' + str(len(x_train[0])))
-        
+        x = lda.fit_transform(x, y)
+
+        print('Complete Applying LDA. Found components: ' + str(len(x[0])))
+
         categories = pd.DataFrame(y)[0].unique()
 
-        y_nn_train = []
-        for i in range(0, len(y_train)):
-            for j in range(0, len(categories)):
-                if categories[j] == y_train[i]:
-                    y_nn_train.append(1)
-                else:
-                    y_nn_train.append(0)
-        
-        y_nn_train = np.array(y_nn_train, dtype='int').reshape(len(y_train), len(categories))
+        models = []
+        valid_scores = []
+        splits = list(StratifiedKFold(n_splits=10, shuffle=True, random_state=42).split(x, y))
+        for idx, (train_idx, valid_idx) in enumerate(splits):
+            print('+-------------------------+')
+            print('| Fold: {:03d}               |'.format(idx + 1))
+            print('+-------------------------+')
 
-        y_nn_valid = []
-        for i in range(0, len(y_valid)):
-            for j in range(0, len(categories)):
-                if categories[j] == y_valid[i]:
-                    y_nn_valid.append(1)
-                else:
-                    y_nn_valid.append(0)
+            x_train = x[train_idx]
+            y_train = y[train_idx]
+            x_valid = x[valid_idx]
+            y_valid = y[valid_idx]
 
-        y_nn_valid = np.array(y_nn_valid, dtype='int').reshape(len(y_valid), len(categories))
-        
-        print('Complete create Y matrix')
-        classifier = self.build_classifier(hidden_layers, act_func, len(x_train[0]), len(categories))
-        print('Complete create arch of NN and compile')
-        classifier.fit(
-            x_train,
-            y_nn_train,
-            callbacks=[
-                EarlyStopping(
-                    monitor='val_loss',
-                    mode='min',
-                    restore_best_weights=True,
-                    patience=5)
-            ],
-            batch_size=batch_size,
-            epochs=nb_epoch,
-            validation_data=(x_valid, y_nn_valid),
-            verbose=2,
-            shuffle=True)
-        print('Complete fitting NN')
+            y_nn_train = self.y_label_to_onehot(y_train, categories)
+            y_nn_valid = self.y_label_to_onehot(y_valid, categories)
+
+            print('Complete create Y matrix')
+            classifier = self.build_classifier(hidden_layers, act_func, len(x_train[0]), len(categories))
+            print('Complete create arch of NN and compile')
+            classifier.fit(
+                x_train,
+                y_nn_train,
+                callbacks=[
+                    EarlyStopping(
+                        monitor='val_loss',
+                        mode='min',
+                        restore_best_weights=True,
+                        patience=5)
+                ],
+                batch_size=batch_size,
+                epochs=nb_epoch,
+                validation_data=(x_valid, y_nn_valid),
+                verbose=2,
+                shuffle=True)
+
+            print('Complete fitting NN')
+
+            models.append(classifier)
+
+            y_valid_pred = self.onehot_to_y_label(classifier.predict(x_valid), categories, 0.5)
+            valid_scores.append(accuracy_score(y_valid, y_valid_pred))
+
+        acc_score = np.asarray(valid_scores, dtype='float64').mean()
+        print('Accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score, 6)))
 
         with open('resources/complaint_classifier.pkl', 'wb') as file:
-            pickle.dump((categories, cv, lda, classifier), file)
+            pickle.dump((categories, cv, lda, models), file)
 
         print('Dump classifier successfully')
+
+        return acc_score
+
+    def y_label_to_onehot(self, y, labels):
+        y_nn = []
+        for i in range(0, len(y)):
+            for j in range(0, len(labels)):
+                if labels[j] == y[i]:
+                    y_nn.append(1)
+                else:
+                    y_nn.append(0)
+
+        return np.array(y_nn, dtype='int').reshape(len(y), len(labels))
+
+    def onehot_to_y_label(self, y_nn, labels, threshold):
+        out = []
+        for i in range(0, len(y_nn)):
+            max_index = 0
+            max_num = 0
+            for j in range(0, len(labels)):
+                if y_nn[i, j] > max_num:
+                    max_num = y_nn[i, j]
+                    max_index = j
+            if y_nn[i, max_index] > threshold:
+                out.append(labels[max_index])
+            else:
+                out.append(-1)
+
+        return np.array(out, dtype='int')
 
     def predict_raw(self, messages):
         corpus, orig = text_preprocessing(messages, 0, 0, self.stop_words_set)
         
         with open('resources/complaint_classifier.pkl', 'rb') as fin:
-            categories, cv, lda, classifier = pickle.load(fin)
+            categories, cv, lda, models = pickle.load(fin)
         
         x = cv.transform(corpus).toarray()
-        x_test = lda.transform(x)
+        x = lda.transform(x)
 
-        return categories, classifier.predict(x_test)
+        test_meta = np.zeros((x.shape[0], len(categories)))
+        for model in models:
+            test_meta += model.predict(x) / len(models)
+
+        return categories, test_meta
     
     def predict(self, messages, threshold=0.5):
         categories, y_pred_nn = self.predict_raw(messages)
         
         print('Using threshold: ' + str(threshold))
-        
-        out = []
-        for i in range(0, len(y_pred_nn)):
-            max_index = 0
-            max_num = 0
-            for j in range(0, len(categories)):
-                if y_pred_nn[i, j] > max_num:
-                    max_num = y_pred_nn[i, j]
-                    max_index = j
-            if y_pred_nn[i, max_index] > threshold:
-                out.append(categories[max_index])
-            else:
-                out.append(-1)
-        
-        y_pred = np.array(out, dtype='int')
-        
-        return y_pred
+
+        return self.onehot_to_y_label(y_pred_nn, categories, threshold)
     
     def predict_backup(self, messages, date, clear_db=False, threshold=0.5):
         db_init()
