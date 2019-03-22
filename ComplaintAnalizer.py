@@ -256,14 +256,19 @@ class Clustering:
                     cluster_lines.append(array_of_arrays[j])
             if len(cluster_lines) > 0:
                 cluster_lines = self.sc.inverse_transform(np.array(cluster_lines))
+            return cluster_lines
         else:
             for i in range(0, len(self.y_pred)):
                 if self.y_pred[i] == cluster_num:
                     cluster_lines.append(self.X[i])
-                if len(cluster_lines) >= cluster_length:
-                    break
-                
-        return cluster_lines
+            if limit > 0:
+                rnd_indexes = np.random.choice(len(cluster_lines), cluster_length)
+                limited_lines = []
+                for rnd_idx in range(len(rnd_indexes)):
+                    limited_lines.append(cluster_lines[rnd_idx])
+                return limited_lines
+            else:
+                return cluster_lines
     
     def fit_som(self, 
                 dataset, 
@@ -480,7 +485,7 @@ class Clustering:
                     fname = free_file_name(os.path.abspath('target/map'), 'png')
                 pyb.savefig(fname)
         if show_tsne_res:
-            plt.figure(figsize=(20, 18))
+            plt.figure(figsize=(40, 38))
             plt.scatter(self.tsne_results[:, 0],
                         self.tsne_results[:, 1],
                         s=25,
@@ -499,7 +504,7 @@ class Clustering:
                 plt.savefig(fname)
             plt.show()
 
-        plt.figure(figsize=(14, 3))
+        plt.figure(figsize=(16, 4))
         ax = sns.countplot(self.y)
         ax.set_title("Clusters sizes")
         for p in ax.patches:
@@ -708,7 +713,7 @@ class Clustering:
 
         self.wordclouds(clusters_list=clusters_list, save_image_to_file=True, save_image_to_db=True)
         
-        clusters_orig_low, clusters_list_low = self.get_clusters_rows(7)
+        clusters_orig_low, clusters_list_low = self.get_clusters_rows(10)
         
         pd.set_option('display.max_colwidth', -1)
         
