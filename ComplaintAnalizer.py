@@ -485,10 +485,10 @@ class Clustering:
                     fname = free_file_name(os.path.abspath('target/map'), 'png')
                 pyb.savefig(fname)
         if show_tsne_res:
-            plt.figure(figsize=(40, 38))
+            plt.figure(figsize=(20, 17))
             plt.scatter(self.tsne_results[:, 0],
                         self.tsne_results[:, 1],
-                        s=25,
+                        s=15,
                         c='black',
                         edgecolors='none',
                         label='Clusters ')
@@ -519,11 +519,50 @@ class Clustering:
             plt.savefig(fname)
         plt.show()
         
-        plt.figure(figsize=(7, 6))
-        
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
+        
+        sizes = []
+        labels = []
+        colors = []
 
         cl_colors = np.random.choice(len(cm.get_cmap().colors), self.n_clusters)
+        
+        size_other = 0
+        for i in range(0, self.n_clusters):
+            cl_code = clusters_codes[i]
+            if cl_code < 0:
+                continue
+            p_size = (len(self.y[self.y == cl_code]) * 100) / len(self.y)
+            if p_size < 2.0:
+                size_other += p_size
+            else:
+                sizes.append(p_size)
+                labels.append(cl_code)
+                colors.append(cm.get_cmap().colors[cl_colors[i]])
+
+        if size_other > 0.0:
+            sizes.append(size_other)
+            labels.append('Other ( < 1%)')
+            colors.append(cm.get_cmap().colors[cl_colors[len(sizes)]])
+        
+        pie_fig, pie_ax = plt.subplots(figsize=(16, 15))
+        pie_ax.pie(sizes,
+                   labels=labels, 
+                   autopct='%1.1f%%', 
+                   shadow=False, 
+                   colors=colors,
+                   startangle=90)
+        pie_ax.axis('equal')
+        if save_image_to_file:
+            if not os.path.isdir(os.path.abspath('target')):
+                os.mkdir(os.path.abspath('target'))
+            fname = os.path.abspath('target/pie.png')
+            if not self.overwrite:
+                fname = free_file_name(os.path.abspath('target/pie'), 'png')
+            plt.savefig(fname)
+        plt.show()
+        
+        plt.figure(figsize=(9, 7))
 
         for i in range(0, self.n_clusters):
             cl_code = clusters_codes[i]
@@ -531,7 +570,7 @@ class Clustering:
                 continue
             plt.scatter(self.index_array[self.y == cl_code, 0], 
                         self.index_array[self.y == cl_code, 1], 
-                        s=25,
+                        s=15,
                         c=cm.get_cmap().colors[cl_colors[i]],
                         edgecolors='none', 
                         label='Cluster ' + str(cl_code))
