@@ -13,9 +13,7 @@ import seaborn as sns
 from hdbscan import HDBSCAN
 from jinja2 import Environment, FileSystemLoader
 from keras.callbacks import EarlyStopping
-from keras.layers import Dense
-from keras.layers import Dropout
-from keras.layers import Input
+from keras.layers import Dense, Dropout, Input
 from keras.models import Model
 from matplotlib import cm
 from minisom import MiniSom
@@ -27,14 +25,18 @@ from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.manifold import TSNE
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import roc_curve
+from sklearn.metrics import accuracy_score, roc_curve
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 from weasyprint import HTML
 from wordcloud import WordCloud
 
 nltk.download('stopwords')
+
+
+TARGET_DIR = 'target'
+RESOURCE_DIR = 'resources'
+DB_NAME = 'complaint_stat.db'
 
 
 def get_prepared_word_array(text):
@@ -64,7 +66,7 @@ def text_preprocessing(dataset, msg_column, min_msg_length, stop_words_set):
 
 
 def db_init():
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS COMPLAINT_CLASSES 
@@ -98,7 +100,7 @@ def db_init():
 
 def clear_classes():
     db_init()
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM COMPLAINT_CLASSES")
     cursor.execute("DELETE FROM COMPLAINT_MESSAGES")
@@ -109,12 +111,21 @@ def clear_classes():
 
 def clear_clusters():
     db_init()
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM CLASSES_LOGO")
     conn.commit()
     conn.close()
     print('All clusters deleted')
+
+
+def get_file_path(filename, directory, overwrite=True):
+    if not os.path.isdir(os.path.abspath(directory)):
+        os.mkdir(os.path.abspath(directory))
+    if overwrite:
+        return os.path.abspath(directory + '/' + filename + '.png')
+    else:
+        return free_file_name(os.path.abspath(directory + '/' + filename), 'png')
 
 
 def free_file_name(filename, ext):
@@ -129,7 +140,7 @@ def free_file_name(filename, ext):
 def get_next_cluster_num():
     db_init()
 
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT CL_NUM FROM CLASSES_LOGO ORDER BY CL_NUM DESC")
     result = cursor.fetchone()
@@ -145,12 +156,12 @@ def get_next_cluster_num():
 def insert_cluster_logo(num):
     db_init()
 
-    filepath = os.path.abspath('target/cl_' + str(num) + '.png')
+    filepath = os.path.abspath(TARGET_DIR + '/cl_' + str(num) + '.png')
 
     with open(filepath, 'rb') as f:
         ablob = f.read()
 
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
 
     try:
         cursor = conn.cursor()
@@ -163,7 +174,7 @@ def insert_cluster_logo(num):
 
 
 def insert_class_row(num, size, date):
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO COMPLAINT_CLASSES VALUES(null, ?, ?, ?)", (num, size, date))
     conn.commit()
@@ -174,7 +185,7 @@ def insert_class_row(num, size, date):
 
 
 def insert_msg_row(cl_id, num, msg):
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("INSERT INTO COMPLAINT_MESSAGES VALUES(null, ?, ?, ?)", (cl_id, num, msg))
     conn.commit()
@@ -182,7 +193,7 @@ def insert_msg_row(cl_id, num, msg):
 
 
 def get_all_classes():
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM COMPLAINT_CLASSES ORDER BY date(CL_DATE) ASC")
     results = cursor.fetchall()
@@ -191,7 +202,7 @@ def get_all_classes():
 
 
 def get_messages_by_class_id(cl_id):
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT CL_MSG FROM COMPLAINT_MESSAGES WHERE CL_ID=?", (cl_id,))
     results = cursor.fetchall()
@@ -200,7 +211,7 @@ def get_messages_by_class_id(cl_id):
 
 
 def extract_all_logos():
-    conn = sqlite3.connect('resources/complaint_stat.db')
+    conn = sqlite3.connect(RESOURCE_DIR + '/' + DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT CL_NUM, CL_LOGO FROM CLASSES_LOGO")
     results = cursor.fetchall()
@@ -208,9 +219,7 @@ def extract_all_logos():
 
     if len(results) > 0:
         for result in results:
-            if not os.path.isdir(os.path.abspath('target')):
-                os.mkdir(os.path.abspath('target'))
-            filename = os.path.abspath('target/cl_' + str(result[0]) + '.png')
+            filename = get_file_path('cl_' + str(result[0]) + '.png', directory=TARGET_DIR)
             with open(filename, 'wb') as f:
                 f.write(result[1])
 
@@ -284,7 +293,7 @@ class Clustering:
         print("corpus length: " + str(len(self.corpus)))
             
         fname = \
-            'resources/som_' + \
+            RESOURCE_DIR + '/som_' + \
             str(self.max_features) + '_' + \
             str(som_size) + '_' + \
             str(som_sigma).replace(".", "_") + '_' + \
@@ -379,7 +388,7 @@ class Clustering:
         print("corpus length: " + str(len(self.corpus)))
             
         fname = \
-            'resources/tsne_' + \
+            RESOURCE_DIR + '/tsne_' + \
             str(self.max_features) + '_' + \
             str(n_iter) + '_' +  \
             str(n_components) + '_' + \
@@ -478,12 +487,7 @@ class Clustering:
             pyb.pcolor(self.som.distance_map().T)
             pyb.colorbar()
             if save_image_to_file:
-                if not os.path.isdir(os.path.abspath('target')):
-                    os.mkdir(os.path.abspath('target'))
-                fname = os.path.abspath('target/map.png')
-                if not self.overwrite:
-                    fname = free_file_name(os.path.abspath('target/map'), 'png')
-                pyb.savefig(fname)
+                pyb.savefig(get_file_path('map', overwrite=self.overwrite, directory=TARGET_DIR))
         if show_tsne_res:
             plt.figure(figsize=(20, 17))
             plt.scatter(self.tsne_results[:, 0],
@@ -496,27 +500,16 @@ class Clustering:
             plt.xlabel('X')
             plt.ylabel('Y')
             if save_image_to_file:
-                if not os.path.isdir(os.path.abspath('target')):
-                    os.mkdir(os.path.abspath('target'))
-                fname = os.path.abspath('target/map.png')
-                if not self.overwrite:
-                    fname = free_file_name(os.path.abspath('target/map'), 'png')
-                plt.savefig(fname)
+                plt.savefig(get_file_path('map', overwrite=self.overwrite, directory=TARGET_DIR))
             plt.show()
 
         plt.figure(figsize=(16, 4))
         ax = sns.countplot(self.y)
         ax.set_title("Clusters sizes")
         for p in ax.patches:
-            ax.annotate(str(format(int(p.get_height()), ',d')), 
-                        (p.get_x(), p.get_height()*1.01))
+            ax.annotate(str(format(int(p.get_height()), ',d')), (p.get_x(), p.get_height()*1.01))
         if save_image_to_file:
-            if not os.path.isdir(os.path.abspath('target')):
-                os.mkdir(os.path.abspath('target'))
-            fname = os.path.abspath('target/count.png')
-            if not self.overwrite:
-                fname = free_file_name(os.path.abspath('target/count'), 'png')
-            plt.savefig(fname)
+            plt.savefig(get_file_path('count', overwrite=self.overwrite, directory=TARGET_DIR))
         plt.show()
         
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
@@ -554,12 +547,7 @@ class Clustering:
                    startangle=90)
         pie_ax.axis('equal')
         if save_image_to_file:
-            if not os.path.isdir(os.path.abspath('target')):
-                os.mkdir(os.path.abspath('target'))
-            fname = os.path.abspath('target/pie.png')
-            if not self.overwrite:
-                fname = free_file_name(os.path.abspath('target/pie'), 'png')
-            plt.savefig(fname)
+            plt.savefig(get_file_path('pie', overwrite=self.overwrite, directory=TARGET_DIR))
         plt.show()
         
         plt.figure(figsize=(9, 7))
@@ -578,12 +566,7 @@ class Clustering:
         plt.xlabel('X')
         plt.ylabel('Y')
         if save_image_to_file:
-            if not os.path.isdir(os.path.abspath('target')):
-                os.mkdir(os.path.abspath('target'))
-            fname = os.path.abspath('target/clusters.png')
-            if not self.overwrite:
-                fname = free_file_name(os.path.abspath('target/clusters'), 'png')
-            plt.savefig(fname)
+            plt.savefig(get_file_path('clusters', overwrite=self.overwrite, directory=TARGET_DIR))
         plt.show()
 
     def clusters_tsne(self):
@@ -720,10 +703,7 @@ class Clustering:
             plt.imshow(word_cloud, interpolation="bilinear")
             plt.axis("off")
             if save_image_to_file:
-                if not os.path.isdir(os.path.abspath('target')):
-                    os.mkdir(os.path.abspath('target'))
-                fname = os.path.abspath('target/cl_' + str(clusters_codes[i]) + '.png')
-                plt.savefig(fname)
+                plt.savefig(get_file_path('cl_' + str(clusters_codes[i]), directory=TARGET_DIR))
             
             if save_image_to_db:
                 insert_cluster_logo(clusters_codes[i])
@@ -762,20 +742,19 @@ class Clustering:
         for i in range(0, len(clusters_list)):
             clusters_doc.append([
                     clusters_codes[i], 
-                    os.path.abspath('target/cl_' + str(clusters_codes[i]) + '.png'),
-                    pd.DataFrame(list(clusters_orig_low[i])).to_html(
-                            header=False, classes=['greenTable']),
+                    os.path.abspath(TARGET_DIR + '/cl_' + str(clusters_codes[i]) + '.png'),
+                    pd.DataFrame(list(clusters_orig_low[i])).to_html(header=False, classes=['greenTable']),
                     len(clusters_orig[i]),
                     self.min_msg_length])
 
-        env = Environment(loader=FileSystemLoader('resources'))
+        env = Environment(loader=FileSystemLoader(RESOURCE_DIR))
         template = env.get_template("template.html")
         template_vars = {
                 "date": datetime.datetime.now().strftime("%d.%m.%Y"),
-                "logo_img": os.path.abspath('target/logo.png').replace("\\", "/"),
-                "map_img": os.path.abspath('target/map.png').replace("\\", "/"),
-                "count_img": os.path.abspath('target/count.png').replace("\\", "/"),
-                "clusters_img": os.path.abspath('target/clusters.png').replace("\\", "/"),
+                "logo_img": os.path.abspath(TARGET_DIR + '/logo.png').replace("\\", "/"),
+                "map_img": os.path.abspath(TARGET_DIR + '/map.png').replace("\\", "/"),
+                "count_img": os.path.abspath(TARGET_DIR + '/count.png').replace("\\", "/"),
+                "clusters_img": os.path.abspath(TARGET_DIR + '/clusters.png').replace("\\", "/"),
                 "clusters": clusters_doc
                 }
         html_out = template.render(template_vars)
@@ -918,16 +897,14 @@ class Classification:
             plt.xlabel('False Positive Rate')
             plt.ylabel('True Positive Rate')
             plt.title('Receiver operating characteristic. Fold ' + str(idx + 1))
-
-            if not os.path.isdir(os.path.abspath('target')):
-                os.mkdir(os.path.abspath('target'))
-            plt.savefig(os.path.abspath('target/auc_fold' + str(idx + 1) + '.png'))
+            if save_image_to_file:
+                plt.savefig(get_file_path('auc_fold' + str(idx + 1), directory=TARGET_DIR))
             plt.show()
 
         acc_score = np.asarray(valid_acc_scores, dtype='float64').mean()
         print('Accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score, 6)))
 
-        with open('resources/complaint_classifier.pkl', 'wb') as file:
+        with open(RESOURCE_DIR + '/complaint_classifier.pkl', 'wb') as file:
             pickle.dump((categories, cv, lda, models), file)
 
         print('Dump classifier successfully')
@@ -964,7 +941,7 @@ class Classification:
     def predict_raw(self, messages):
         corpus, orig = text_preprocessing(messages, 0, 0, self.stop_words_set)
         
-        with open('resources/complaint_classifier.pkl', 'rb') as fin:
+        with open(RESOURCE_DIR + '/complaint_classifier.pkl', 'rb') as fin:
             categories, cv, lda, models = pickle.load(fin)
         
         x = cv.transform(corpus).toarray()
@@ -1051,12 +1028,7 @@ class Classification:
                 [dates[0], dates[int(len(dates) / 2)], dates[len(dates) - 1]],
                 rotation=45
             )
-
-            if not os.path.isdir(os.path.abspath('target')):
-                os.mkdir(os.path.abspath('target'))
-            filename = os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png')
-
-            plt.savefig(filename, bbox_inches='tight')
+            plt.savefig(get_file_path('dyn_' + str(unique_classes[i]), directory=TARGET_DIR), bbox_inches='tight')
             plt.show()
 
         classes = []
@@ -1079,16 +1051,16 @@ class Classification:
 
             classes.append([
                 unique_classes[i],
-                os.path.abspath('target/cl_' + str(unique_classes[i]) + '.png'),
-                os.path.abspath('target/dyn_' + str(unique_classes[i]) + '.png'),
+                os.path.abspath(TARGET_DIR + '/cl_' + str(unique_classes[i]) + '.png'),
+                os.path.abspath(TARGET_DIR + '/dyn_' + str(unique_classes[i]) + '.png'),
                 pd.DataFrame(messages).to_html(header=False, classes=['greenTable'])
             ])
 
-        env = Environment(loader=FileSystemLoader('resources'))
+        env = Environment(loader=FileSystemLoader(RESOURCE_DIR))
         template = env.get_template("dynamics.html")
         template_vars = {
             "date": datetime.datetime.now().strftime("%d.%m.%Y"),
-            "logo_img": os.path.abspath('target/logo.png').replace("\\", "/"),
+            "logo_img": os.path.abspath(TARGET_DIR + '/logo.png').replace("\\", "/"),
             "classes": classes
         }
         html_out = template.render(template_vars)
