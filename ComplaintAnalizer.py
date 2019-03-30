@@ -1,4 +1,5 @@
 import datetime
+import logging.config
 import os
 import pickle
 import re
@@ -31,12 +32,14 @@ from sklearn.preprocessing import MinMaxScaler
 from weasyprint import HTML
 from wordcloud import WordCloud
 
-nltk.download('stopwords')
-
-
 TARGET_DIR = 'target'
 RESOURCE_DIR = 'resources'
 DB_NAME = 'complaint_stat.db'
+
+nltk.download('stopwords')
+
+logging.config.fileConfig(RESOURCE_DIR + '/logging.conf')
+logger = logging.getLogger("feedback-analyzer.ComplaintAnalizer")
 
 
 def get_prepared_word_array(text):
@@ -106,7 +109,7 @@ def clear_classes():
     cursor.execute("DELETE FROM COMPLAINT_MESSAGES")
     conn.commit()
     conn.close()
-    print('All classes deleted')
+    logger.info('All classes deleted')
 
 
 def clear_clusters():
@@ -116,7 +119,7 @@ def clear_clusters():
     cursor.execute("DELETE FROM CLASSES_LOGO")
     conn.commit()
     conn.close()
-    print('All clusters deleted')
+    logger.info('All clusters deleted')
 
 
 def get_file_path(filename, directory, overwrite=True):
@@ -168,7 +171,7 @@ def insert_cluster_logo(num):
         cursor.execute("INSERT INTO CLASSES_LOGO VALUES(?, ?)", (int(num), sqlite3.Binary(ablob)))
         conn.commit()
     except Exception as e:
-        print('Exception while insert logo to db')
+        logger.info('Exception while insert logo to db')
 
     conn.close()
 
@@ -243,7 +246,7 @@ class Clustering:
 
     def get_original_x_rows_for_cluster(self, cluster_num, limit=-1):
         if limit > 0:
-            print('--- cluster ' + str(cluster_num) + '---')
+            logger.info('--- cluster ' + str(cluster_num) + '---')
         
         cluster_lines = []
 
@@ -259,7 +262,7 @@ class Clustering:
         if self.is_som_mappings_set:
             for i in range(0, cluster_length):
                 if limit > 0:
-                    print('cluster[' + str(i) + ']: ' + str(cluster[i][2]))
+                    logger.info('cluster[' + str(i) + ']: ' + str(cluster[i][2]))
                 array_of_arrays = self.mappings[(cluster[i][0], cluster[i][1])]
                 for j in range(0, len(array_of_arrays)):
                     cluster_lines.append(array_of_arrays[j])
@@ -290,7 +293,7 @@ class Clustering:
                                                     self.min_msg_length, 
                                                     self.stop_words_set)
         
-        print("corpus length: " + str(len(self.corpus)))
+        logger.info("corpus length: " + str(len(self.corpus)))
             
         fname = \
             RESOURCE_DIR + '/som_' + \
@@ -304,7 +307,7 @@ class Clustering:
         else:
             fname = fname + '.pkl'
 
-        print("Using SOM model file: " + str(fname))
+        logger.info("Using SOM model file: " + str(fname))
         
         if not os.path.isfile(fname):
             cv = CountVectorizer(max_features=self.max_features)
@@ -325,8 +328,8 @@ class Clustering:
             self.X = cv.fit_transform(self.corpus).toarray()
             self.X_scale = self.sc.fit_transform(self.X)
         
-        print('X rows: ' + str(len(self.X)))
-        print('X cols: ' + str(len(self.X[0])))
+        logger.info('X rows: ' + str(len(self.X)))
+        logger.info('X cols: ' + str(len(self.X[0])))
         
         distance_map = self.som.distance_map()
         
@@ -359,7 +362,7 @@ class Clustering:
         
         self.y = np.array(self.y, dtype='int')
         
-        print('Next cluster num: ' + str(next_cluster_num))
+        logger.info('Next cluster num: ' + str(next_cluster_num))
         
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
         
@@ -370,8 +373,8 @@ class Clustering:
         
         self.index_array = np.concatenate((coord_array, dist_array), axis=1)
         
-        print('Cluster codes (' + str(self.n_clusters) + '):')
-        print(clusters_codes)
+        logger.info('Cluster codes (' + str(self.n_clusters) + '):')
+        logger.info(clusters_codes)
         
     def fit_tsne(self, 
                  dataset, 
@@ -385,7 +388,7 @@ class Clustering:
                                                     self.min_msg_length, 
                                                     self.stop_words_set)
         
-        print("corpus length: " + str(len(self.corpus)))
+        logger.info("corpus length: " + str(len(self.corpus)))
             
         fname = \
             RESOURCE_DIR + '/tsne_' + \
@@ -400,7 +403,7 @@ class Clustering:
         else:
             fname = fname + '.pkl'
 
-        print("Using t-SNE model file: " + str(fname))
+        logger.info("Using t-SNE model file: " + str(fname))
         
         if not os.path.isfile(fname):
             cv = CountVectorizer(max_features=self.max_features)
@@ -408,7 +411,7 @@ class Clustering:
 
             pca = PCA(n_components=n_components)
             x_pca = pca.fit_transform(self.X)
-            print('Cumulative explained variation for principal components: {}'.format(np.sum(pca.explained_variance_ratio_)))
+            logger.info('Cumulative explained variation for principal components: {}'.format(np.sum(pca.explained_variance_ratio_)))
 
             tsne = TSNE(n_components=2, 
                         verbose=1, 
@@ -424,8 +427,8 @@ class Clustering:
             self.X = cv.fit_transform(self.corpus).toarray()
             self.x_pca = pca.fit_transform(self.X)
         
-        print('X rows: ' + str(len(self.X)))
-        print('X cols: ' + str(len(self.X[0])))
+        logger.info('X rows: ' + str(len(self.X)))
+        logger.info('X cols: ' + str(len(self.X[0])))
         
         df = pd.DataFrame(columns=['X', 'Y'])
         df['X'] = self.tsne_results[:, 0]
@@ -448,7 +451,7 @@ class Clustering:
         
         self.y = np.array(self.y, dtype='int')
         
-        print('Next cluster num: ' + str(next_cluster_num))
+        logger.info('Next cluster num: ' + str(next_cluster_num))
         
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
         
@@ -458,8 +461,8 @@ class Clustering:
         
         self.index_array = np.concatenate((filtered_values, np.zeros((len(filtered_values), 1), dtype='float')), axis=1)
         
-        print('Cluster codes (' + str(self.n_clusters) + '):')
-        print(clusters_codes)
+        logger.info('Cluster codes (' + str(self.n_clusters) + '):')
+        logger.info(clusters_codes)
     
     def get_index_array(self):
         return self.index_array
@@ -696,7 +699,7 @@ class Clustering:
         
         for i in range(0, len(clusters_list)):
             if len(clusters_list[i]) == 0:
-                print("Empty cluster #" + str(clusters_codes[i]))
+                logger.info("Empty cluster #" + str(clusters_codes[i]))
                 continue
             word_cloud = WordCloud(max_font_size=40, background_color="white").generate(clusters_list[i])
             plt.figure(figsize=(7, 4))
@@ -715,7 +718,7 @@ class Clustering:
         for i in range(0, len(add_stop_words)):
             self.stop_words_set.add(add_stop_words[i].strip())
         current_length = len(self.stop_words_set)
-        print("Added " + str(current_length - prev_length) + " stop words")
+        logger.info("Added " + str(current_length - prev_length) + " stop words")
     
     def stopwords_from_file(self, filepath):
         file = open(os.path.abspath(filepath), "r")
@@ -772,14 +775,14 @@ class Classification:
         for i in range(0, len(add_stop_words)):
             self.stop_words_set.add(add_stop_words[i].strip())
         current_length = len(self.stop_words_set)
-        print("Added " + str(current_length - prev_length) + " stop words")
+        logger.info("Added " + str(current_length - prev_length) + " stop words")
     
     def stopwords_from_file(self, filepath):
         file = open(os.path.abspath(filepath), "r")
         self.set_additional_stopwords(file.readlines())
 
     def build_classifier(self, hidden_layers, act_func, input_size, output_size):
-        print('==> build_classifier(' +
+        logger.info('==> build_classifier(' +
               str(hidden_layers) + ', ' +
               str(act_func) + ', ' +
               str(input_size) + ', ' +
@@ -790,7 +793,7 @@ class Classification:
         else:
             layer_size = output_size * 7
         
-        print('Hidden layer size: ' + str(layer_size))
+        logger.info('Hidden layer size: ' + str(layer_size))
 
         inp = Input(shape=(input_size,))
 
@@ -809,7 +812,7 @@ class Classification:
         model = Model(inputs=inp, outputs=outp)
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         
-        print('<== build_classifier()')
+        logger.info('<== build_classifier()')
         
         return model
 
@@ -829,19 +832,19 @@ class Classification:
                                           min_msg_length,
                                           self.stop_words_set)
         
-        print('Complete text pre processing')
+        logger.info('Complete text pre processing')
 
         cv = CountVectorizer(max_features=self.max_features)
         x = cv.fit_transform(corpus).toarray()
         y = [row[class_column] for row in dataset]
         y = np.array(y, dtype='int')
 
-        print('Complete determine X and y')
+        logger.info('Complete determine X and y')
 
         lda = LDA(n_components=100)
         x = lda.fit_transform(x, y)
 
-        print('Complete Applying LDA. Found components: ' + str(len(x[0])))
+        logger.info('Complete Applying LDA. Found components: ' + str(len(x[0])))
 
         categories = pd.DataFrame(y)[0].unique()
 
@@ -849,9 +852,9 @@ class Classification:
         valid_acc_scores = []
         splits = list(StratifiedKFold(n_splits=10, shuffle=True, random_state=42).split(x, y))
         for idx, (train_idx, valid_idx) in enumerate(splits):
-            print('+-------------------------+')
-            print('| Fold: {:03d}               |'.format(idx + 1))
-            print('+-------------------------+')
+            logger.info('+-------------------------+')
+            logger.info('| Fold: {:03d}               |'.format(idx + 1))
+            logger.info('+-------------------------+')
 
             x_train = x[train_idx]
             y_train = y[train_idx]
@@ -882,7 +885,10 @@ class Classification:
 
             y_nn_pred = classifier.predict(x_valid)
             y_valid_pred = self.onehot_to_y_label(y_nn_pred, categories, 0.5)
-            valid_acc_scores.append(accuracy_score(y_valid, y_valid_pred))
+            acc_score_val_fold = accuracy_score(y_valid, y_valid_pred)
+            valid_acc_scores.append(acc_score_val_fold)
+
+            logger.info('Accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score_val_fold, 6)))
 
             plt.figure()
             plt.plot([0, 1], [0, 1], 'k--')
@@ -902,12 +908,12 @@ class Classification:
             plt.show()
 
         acc_score = np.asarray(valid_acc_scores, dtype='float64').mean()
-        print('Accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score, 6)))
+        logger.info('Accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score, 6)))
 
         with open(RESOURCE_DIR + '/complaint_classifier.pkl', 'wb') as file:
             pickle.dump((categories, cv, lda, models), file)
 
-        print('Dump classifier successfully')
+        logger.info('Dump classifier successfully')
 
         return acc_score
 
@@ -956,7 +962,7 @@ class Classification:
     def predict(self, messages, threshold=0.5):
         categories, y_pred_nn = self.predict_raw(messages)
         
-        print('Using threshold: ' + str(threshold))
+        logger.info('Using threshold: ' + str(threshold))
 
         return self.onehot_to_y_label(y_pred_nn, categories, threshold)
     
@@ -965,7 +971,7 @@ class Classification:
         
         if clear_db:
             clear_classes()
-            print('All classes deleted')
+            logger.info('All classes deleted')
         
         y_pred = self.predict(messages=messages, threshold=threshold)
         
@@ -975,7 +981,7 @@ class Classification:
         
         unique_classes = frame['class'].unique()
         
-        print('Unique classes: ' + str(len(unique_classes)))
+        logger.info('Unique classes: ' + str(len(unique_classes)))
         
         for i in range(0, len(unique_classes)):
             class_num = int(unique_classes[i])
@@ -989,7 +995,7 @@ class Classification:
                         insert_msg_row(cl_id, class_num, str(messages[cl][0]))
                         count -= 1
 
-            print('class: ' + str(class_num) + ' \t\tsize: ' + str(len(class_rows)) + '. \t\tInsert to db successful.')
+            logger.info('class: ' + str(class_num) + ' \t\tsize: ' + str(len(class_rows)) + '. \t\tInsert to db successful.')
 
     def classes_report(self, path, msg_period=0):
         extract_all_logos()

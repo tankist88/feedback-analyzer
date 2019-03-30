@@ -1,5 +1,8 @@
 import os
 
+import logging
+import logging.config
+
 import numpy as np
 import pandas as pd
 
@@ -28,25 +31,36 @@ def fill_db(classifier_in, dataset_in, date_in, ths):
                                      threshold=ths)
 
 
-print('+-----------------------+')
-print('| Let\'s go evaluate!    |')
-print('+-----------------------+')
+def main():
+    logging.config.fileConfig('resources/logging.conf')
+    logger = logging.getLogger("feedback-analyzer.eval_classifier")
+    
+    logger.info('+-----------------------+')
+    logger.info('| Let\'s go evaluate!    |')
+    logger.info('+-----------------------+')
 
-classifier = Classification()
-classifier.stopwords_from_file('resources/complaint_stopwords.txt')
+    classifier = Classification()
+    classifier.stopwords_from_file('resources/complaint_stopwords.txt')
 
-new_file_count = 0
-for file in os.listdir('datasets/classification'):
-    if not file.endswith('.csv'):
-        continue
-    ds = pd.read_csv(os.path.abspath('datasets/classification/' + file), header=None)
-    date_str = file.split(sep='_')[1].split(sep='.')[0]
-    fill_db(classifier, ds.values, date_str, 0.4)
-    new_file_count += 1
+    new_file_count = 0
+    for file in os.listdir('datasets/classification'):
+        if not file.endswith('.csv'):
+            continue
 
-if new_file_count > 0:
-    classifier.classes_report('reports/dynamics.pdf', 3)
-else:
-    print('New files for evaluating not found')
+        logger.info('File: {:03d}'.format(new_file_count + 1))
 
-print('Complete evaluate')
+        ds = pd.read_csv(os.path.abspath('datasets/classification/' + file), header=None)
+        date_str = file.split(sep='_')[1].split(sep='.')[0]
+        fill_db(classifier, ds.values, date_str, 0.4)
+        new_file_count += 1
+
+    if new_file_count > 0:
+        classifier.classes_report('reports/dynamics.pdf', 3)
+    else:
+        logger.info('New files for evaluating not found')
+
+    logger.info('Complete evaluate')
+
+
+if __name__ == "__main__":
+    main()

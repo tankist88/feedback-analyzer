@@ -1,9 +1,15 @@
 /.idea
 /__pycache__
 *.png
+*.jpg
+*.jpeg
+*.bmp
+*.svg
 *.pkl
 *.db
+*.db-journal
 *.csv
 *.pdf
 *.zip
 *.rar
+*.log
