@@ -381,8 +381,7 @@ class Clustering:
                  min_cluster_size=55, 
                  perplexity=40, 
                  n_iter=2500, 
-                 learning_rate=700.0, 
-                 n_components=107):
+                 learning_rate=700.0):
         self.corpus, self.orig = text_preprocessing(dataset, 
                                                     self.msg_column, 
                                                     self.min_msg_length, 
@@ -394,7 +393,6 @@ class Clustering:
             RESOURCE_DIR + '/tsne_' + \
             str(self.max_features) + '_' + \
             str(n_iter) + '_' +  \
-            str(n_components) + '_' + \
             str(perplexity).replace(".", "_") + '_' + \
             str(learning_rate).replace(".", "_")
         
@@ -409,8 +407,18 @@ class Clustering:
             cv = CountVectorizer(max_features=self.max_features)
             self.X = cv.fit_transform(self.corpus).toarray()
 
-            pca = PCA(n_components=n_components)
+            pca_all = PCA()
+            pca_all.fit_transform(self.X)
+
+            ratio = 0.0
+            n_components = 0
+            while ratio < 0.85:
+                ratio += pca_all.explained_variance_ratio_[n_components]
+                n_components += 1
+
+            pca = PCA(n_components)
             x_pca = pca.fit_transform(self.X)
+
             logger.info('Cumulative explained variation for principal components: {}'.format(np.sum(pca.explained_variance_ratio_)))
 
             tsne = TSNE(n_components=2, 

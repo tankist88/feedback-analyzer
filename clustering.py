@@ -46,7 +46,7 @@ def main():
 
         logger.info('Complete filtering dataset')
 
-        cl = Clustering(max_features=190,
+        cl = Clustering(max_features=250,
                         msg_column=8,
                         min_msg_length=20)
 
@@ -58,9 +58,8 @@ def main():
         cl.fit_tsne(dataset,
                     min_cluster_size=42,
                     perplexity=40,
-                    n_iter=2000,
-                    learning_rate=500.0,
-                    n_components=137)
+                    n_iter=2500,
+                    learning_rate=500.0)
 
         cl.visualize(save_image_to_file=True, show_tsne_res=True)
 
