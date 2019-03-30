@@ -908,7 +908,7 @@ class Classification:
             plt.show()
 
         acc_score = np.asarray(valid_acc_scores, dtype='float64').mean()
-        logger.info('Accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score, 6)))
+        logger.info('Mean accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score, 6)))
 
         with open(RESOURCE_DIR + '/complaint_classifier.pkl', 'wb') as file:
             pickle.dump((categories, cv, lda, models), file)
