@@ -1,4 +1,6 @@
-import pickle
+import os
+
+import pandas as pd
 
 import logging
 import logging.config
@@ -13,9 +15,12 @@ def main():
     logger.info('+-----------------------+')
     logger.info('| Let\'s go train!       |')
     logger.info('+-----------------------+')
-    
-    with open('resources/clusters.pkl', 'rb') as file:
-        clusters = pickle.load(file)
+
+    clusters = pd.read_csv(
+        os.path.abspath('resources/train.csv'),
+        delimiter=';',
+        encoding='windows-1251'
+    ).values
     
     classifier = Classification()
     classifier.stopwords_from_file('resources/complaint_stopwords.txt')

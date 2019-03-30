@@ -1,10 +1,8 @@
-import gc
-import os
-import pickle
-
 import logging
 import logging.config
+import os
 
+import gc
 import numpy as np
 import pandas as pd
 
@@ -58,7 +56,7 @@ def main():
         clear_classes()
 
         cl.fit_tsne(dataset,
-                    min_cluster_size=40,
+                    min_cluster_size=42,
                     perplexity=40,
                     n_iter=2000,
                     learning_rate=500.0,
@@ -67,8 +65,11 @@ def main():
         cl.visualize(save_image_to_file=True, show_tsne_res=True)
 
         clusters = cl.clusters_tsne()
-        with open('resources/clusters.pkl', 'wb') as file:
-            pickle.dump(clusters, file)
+
+        out_df = pd.DataFrame(columns=['cluster', 'text'])
+        out_df['cluster'] = [row[0] for row in clusters]
+        out_df['text'] = [row[1] for row in clusters]
+        out_df.to_csv("resources/train.csv", index=False, sep=';', encoding='windows-1251')
 
         cl.report('reports/clusters.pdf', show_tsne_res=True)
     else:
