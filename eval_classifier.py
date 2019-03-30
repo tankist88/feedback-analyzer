@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 
 from ComplaintAnalizer import Classification
-from ComplaintAnalizer import clear_classes
 
 
 def get_messages(dataset_in):
@@ -35,13 +34,19 @@ print('+-----------------------+')
 
 classifier = Classification()
 classifier.stopwords_from_file('resources/complaint_stopwords.txt')
-clear_classes()
 
+new_file_count = 0
 for file in os.listdir('datasets/classification'):
+    if not file.endswith('.csv'):
+        continue
     ds = pd.read_csv(os.path.abspath('datasets/classification/' + file), header=None)
     date_str = file.split(sep='_')[1].split(sep='.')[0]
     fill_db(classifier, ds.values, date_str, 0.4)
+    new_file_count += 1
 
-classifier.classes_report('reports/dynamics.pdf', 3)
+if new_file_count > 0:
+    classifier.classes_report('reports/dynamics.pdf', 3)
+else:
+    print('New files for evaluating not found')
 
 print('Complete evaluate')
