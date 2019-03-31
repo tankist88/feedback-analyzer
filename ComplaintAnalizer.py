@@ -512,7 +512,9 @@ class Clustering:
             plt.ylabel('Y')
             if save_image_to_file:
                 plt.savefig(get_file_path('map', overwrite=self.overwrite, directory=TARGET_DIR))
-            plt.show()
+                plt.close()
+            else:
+                plt.show()
 
         plt.figure(figsize=(16, 4))
         ax = sns.countplot(self.y)
@@ -521,7 +523,9 @@ class Clustering:
             ax.annotate(str(format(int(p.get_height()), ',d')), (p.get_x(), p.get_height()*1.01))
         if save_image_to_file:
             plt.savefig(get_file_path('count', overwrite=self.overwrite, directory=TARGET_DIR))
-        plt.show()
+            plt.close()
+        else:
+            plt.show()
         
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
         
@@ -559,7 +563,9 @@ class Clustering:
         pie_ax.axis('equal')
         if save_image_to_file:
             plt.savefig(get_file_path('pie', overwrite=self.overwrite, directory=TARGET_DIR))
-        plt.show()
+            plt.close()
+        else:
+            plt.show()
         
         plt.figure(figsize=(9, 7))
 
@@ -578,7 +584,9 @@ class Clustering:
         plt.ylabel('Y')
         if save_image_to_file:
             plt.savefig(get_file_path('clusters', overwrite=self.overwrite, directory=TARGET_DIR))
-        plt.show()
+            plt.close()
+        else:
+            plt.show()
 
     def clusters_tsne(self):
         clusters_orig = []
@@ -715,11 +723,12 @@ class Clustering:
             plt.axis("off")
             if save_image_to_file:
                 plt.savefig(get_file_path('cl_' + str(clusters_codes[i]), directory=TARGET_DIR))
+                plt.close()
+            else:
+                plt.show()
             
             if save_image_to_db:
                 insert_cluster_logo(clusters_codes[i])
-            
-            plt.show()
     
     def set_additional_stopwords(self, add_stop_words):
         prev_length = len(self.stop_words_set)
@@ -913,7 +922,9 @@ class Classification:
             plt.title('Receiver operating characteristic. Fold ' + str(idx + 1))
             if save_image_to_file:
                 plt.savefig(get_file_path('auc_fold' + str(idx + 1), directory=TARGET_DIR))
-            plt.show()
+                plt.close()
+            else:
+                plt.show()
 
         acc_score = np.asarray(valid_acc_scores, dtype='float64').mean()
         logger.info('Mean accuracy score (threshold = 0.5): {:07.6f}'.format(round(acc_score, 6)))
@@ -1043,7 +1054,7 @@ class Classification:
                 rotation=45
             )
             plt.savefig(get_file_path('dyn_' + str(unique_classes[i]), directory=TARGET_DIR), bbox_inches='tight')
-            plt.show()
+            plt.close()
 
         classes = []
 
