@@ -9,26 +9,27 @@ import pandas as pd
 from ComplaintAnalizer import Classification
 
 
-def get_messages(dataset_in):
-    filtered_dataset_in = []
-    for index in range(0, len(dataset_in)):
-        if pd.isnull(dataset_in[index][8]) or dataset_in[index][7] != 'Проблема':
+def get_messages(dataset):
+    filtered_dataset = []
+    for index in range(0, len(dataset)):
+        if pd.isnull(dataset[index][8]) or dataset[index][7] != 'Проблема':
             continue
-        filtered_dataset_in.append(dataset_in[index])
-    dataset_in = np.array(filtered_dataset_in)
+        filtered_dataset.append(dataset[index])
+    filtered_dataset = np.asarray(filtered_dataset)
 
-    only_msg = [row[8] for row in dataset_in]
+    only_msg = [row[8] for row in filtered_dataset]
     only_msg = np.array(only_msg).reshape(len(only_msg), 1)
     return only_msg
 
 
-def fill_db(classifier_in, dataset_in, date_in, ths):
-    msgs = get_messages(dataset_in)
+def fill_db(classifier, dataset, date, ths):
+    msgs = get_messages(dataset)
     if len(msgs) > 0:
-        classifier_in.predict_backup(messages=msgs,
-                                     date=date_in,
-                                     clear_db=False,
-                                     threshold=ths)
+        classifier.predict_backup(
+            messages=msgs,
+            date=date,
+            clear_db=False,
+            threshold=ths)
 
 
 def main():
