@@ -500,7 +500,7 @@ class Clustering:
             if save_image_to_file:
                 pyb.savefig(get_file_path('map', overwrite=self.overwrite, directory=TARGET_DIR))
         if show_tsne_res:
-            plt.figure(figsize=(20, 17))
+            plt.figure(figsize=(10, 8))
             plt.scatter(self.tsne_results[:, 0],
                         self.tsne_results[:, 1],
                         s=15,
@@ -516,7 +516,7 @@ class Clustering:
             else:
                 plt.show()
 
-        plt.figure(figsize=(16, 4))
+        plt.figure(figsize=(10, 4))
         ax = sns.countplot(self.y)
         ax.set_title("Clusters sizes")
         for p in ax.patches:
@@ -553,7 +553,7 @@ class Clustering:
             labels.append('Other ( < 1%)')
             colors.append(cm.get_cmap().colors[cl_colors[len(sizes)]])
         
-        pie_fig, pie_ax = plt.subplots(figsize=(16, 15))
+        pie_fig, pie_ax = plt.subplots(figsize=(10, 9))
         pie_ax.pie(sizes,
                    labels=labels, 
                    autopct='%1.1f%%', 
@@ -573,12 +573,15 @@ class Clustering:
             cl_code = clusters_codes[i]
             if cl_code < 0:
                 continue
-            plt.scatter(self.index_array[self.y == cl_code, 0], 
-                        self.index_array[self.y == cl_code, 1], 
+            cl_x = self.index_array[self.y == cl_code, 0]
+            cl_y = self.index_array[self.y == cl_code, 1]
+            plt.scatter(cl_x, 
+                        cl_y, 
                         s=15,
                         c=cm.get_cmap().colors[cl_colors[i]],
                         edgecolors='none', 
                         label='Cluster ' + str(cl_code))
+            plt.text(cl_x.mean(), cl_y.mean(), str(cl_code), {'color': 'red', 'fontsize': 18})
         plt.title('Clusters')
         plt.xlabel('X')
         plt.ylabel('Y')
@@ -713,12 +716,13 @@ class Clustering:
     def wordclouds(self, clusters_list, save_image_to_file=False, save_image_to_db=False):
         clusters_codes = pd.DataFrame(self.y, columns=['cl'])['cl'].unique()
         
-        for i in range(0, len(clusters_list)):
+        for i in range(len(clusters_list)):
             if len(clusters_list[i]) == 0:
                 logger.info("Empty cluster #" + str(clusters_codes[i]))
                 continue
             word_cloud = WordCloud(max_font_size=40, background_color="white").generate(clusters_list[i])
             plt.figure(figsize=(7, 4))
+            plt.title('Cluster #' + str(clusters_codes[i]))
             plt.imshow(word_cloud, interpolation="bilinear")
             plt.axis("off")
             if save_image_to_file:
